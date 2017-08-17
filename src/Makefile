@@ -1,13 +1,13 @@
-HW3_CXX_SRC=rtrace.cpp
-HW3_HEADER=
-HW3_OBJ=$(notdir $(patsubst %.cpp,%.o,$(HW3_CXX_SRC)))
+RTRACE_CXX_SRC=rtrace.cpp
+RTRACE_HEADER=
+RTRACE_OBJ=$(notdir $(patsubst %.cpp,%.o,$(RTRACE_CXX_SRC)))
 
 IMAGE_LIB_SRC=$(wildcard ../external/imageIO/*.cpp)
 IMAGE_LIB_HEADER=$(wildcard ../external/imageIO/*.h)
 IMAGE_LIB_OBJ=$(notdir $(patsubst %.cpp,%.o,$(IMAGE_LIB_SRC)))
 
-HEADER=$(HW3_HEADER) $(IMAGE_LIB_HEADER)
-CXX_OBJ=$(HW3_OBJ) $(IMAGE_LIB_OBJ)
+HEADER=$(RTRACE_HEADER) $(IMAGE_LIB_HEADER)
+CXX_OBJ=$(RTRACE_OBJ) $(IMAGE_LIB_OBJ)
 
 CXX=g++
 TARGET=rtrace
@@ -34,7 +34,7 @@ all: $(TARGET)
 $(TARGET): $(CXX_OBJ)
 	$(CXX) $(LDFLAGS) $^ $(OPT) $(LIB) -o $@
 
-$(HW3_OBJ):%.o: %.cpp $(HEADER)
+$(RTRACE_OBJ):%.o: %.cpp $(HEADER)
 	$(CXX) -c $(CXXFLAGS) $(OPT) $(INCLUDE) $< -o $@
 
 $(IMAGE_LIB_OBJ):%.o: ../external/imageIO/%.cpp $(IMAGE_LIB_HEADER)
