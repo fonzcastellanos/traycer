@@ -1,10 +1,3 @@
-/* **************************
- * CSCI 420
- * Assignment 3 Raytracer
- * Name: <Alfonso Castellanos>
- * *************************
-*/
-
 #ifdef WIN32
     #include <windows.h>
 #endif
@@ -713,4 +706,3 @@ int main(int argc, char ** argv) {
 
     glutMainLoop();
 }
-
