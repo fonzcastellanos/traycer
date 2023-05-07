@@ -12,7 +12,7 @@ add_compile_options(-Wall -Wextra -Wpedantic -DGLM_FORCE_RADIANS)
 
 add_subdirectory(vendor/glm)
 
-add_executable(traycer rtrace.cpp)
+add_executable(traycer main.cpp)
 target_link_libraries(traycer PRIVATE glm)
 target_include_directories(traycer PRIVATE vendor)
 
