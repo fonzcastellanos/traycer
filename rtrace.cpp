@@ -17,18 +17,34 @@
 #define strcasecmp _stricmp
 #endif
 
-#include <imageIO.h>
-
 #include <cfloat>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <glm/glm.hpp>
 #include <iostream>
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 #define MAX_TRIANGLES 20000
 #define MAX_SPHERES 100
 #define MAX_LIGHTS 100
+
+enum RgbChannel {
+  kRgbChannel_Red,
+  kRgbChannel_Green,
+  kRgbChannel_Blue,
+  kRgbChannel__Count
+};
+
+enum Status {
+  kStatus_Ok,
+  kStatus_UnspecifiedError,
+  kStatus_IoError,
+  kStatus_GlError
+};
 
 char *filename = NULL;
 
@@ -136,7 +152,7 @@ void plot_pixel_jpeg(int x, int y, unsigned char r, unsigned char g,
                      unsigned char b);
 void plot_pixel(int x, int y, unsigned char r, unsigned char g,
                 unsigned char b);
-void save_jpg();
+Status save_jpg();
 void parse_check(const char *expected, char *found);
 void parse_floats(FILE *file, const char *check, glm::vec3 &p);
 void parse_rad(FILE *file, float *r);
@@ -188,14 +204,17 @@ void plot_pixel(int x, int y, unsigned char r, unsigned char g,
   if (mode == MODE_JPEG) plot_pixel_jpeg(x, y, r, g, b);
 }
 
-void save_jpg() {
+Status save_jpg() {
   printf("Saving JPEG file: %s\n", filename);
 
-  ImageIO img(WIDTH, HEIGHT, 3, &buffer[0][0][0]);
-  if (img.save(filename, ImageIO::FORMAT_JPEG) != ImageIO::OK)
-    printf("Error in Saving\n");
-  else
-    printf("File saved Successfully\n");
+  int rc = stbi_write_jpg(filename, WIDTH, HEIGHT, kRgbChannel__Count,
+                          &buffer[0][0][0], 95);
+  if (rc == 0) {
+    std::fprintf(stderr, "Could not write data to JPEG file %s\n", filename);
+    return kStatus_IoError;
+  }
+
+  return kStatus_Ok;
 }
 
 void parse_check(const char *expected, char *found) {
@@ -310,7 +329,17 @@ void idle() {
   static int once = 0;
   if (!once) {
     draw_scene();
-    if (mode == MODE_JPEG) save_jpg();
+    if (mode == MODE_JPEG) {
+      Status status = save_jpg();
+      if (status != kStatus_Ok) {
+        std::fprintf(stderr, "Failed to save JPEG file %s.\n", filename);
+#ifdef __APPLE__
+        exit(EXIT_FAILURE);
+#else
+        glutLeaveMainLoop();
+#endif
+      }
+    }
   }
   once = 1;
 }
@@ -677,6 +706,8 @@ int main(int argc, char **argv) {
   glutIdleFunc(idle);
   init();
 
+  std::fprintf(stderr, "After init().\n");
+
   if (numExtraLights > 0) {
     std::srand(std::time(NULL));
     for (int l = 0; l < num_lights; ++l) {
@@ -716,6 +747,8 @@ int main(int argc, char **argv) {
     }
   }
   delete[] rays;
+
+  std::fprintf(stderr, "Hello!!!\n");
 
   glutMainLoop();
 }
