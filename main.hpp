@@ -13,6 +13,7 @@ enum Status {
 };
 
 struct Config {
+  char *scene_filepath;
   int rays_per_pixel;
   int reflection_bounces;
   int extra_lights_per_light;

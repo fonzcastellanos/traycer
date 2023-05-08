@@ -757,38 +757,48 @@ glm::vec3 shade(Intersection *surface, int bounces) {
   return phongColor;
 }
 
+Status ParseConfig(uint argc, char *argv[], Config *c) {
+  assert(argv);
+  assert(c);
+
+  cli::Opt opts[] = {
+      {"rays-per-pixel", cli::kOptType_Int, &c->rays_per_pixel},
+      {"reflection-bounces", cli::kOptType_Int, &c->reflection_bounces},
+      {"extra-lights-per-light", cli::kOptType_Int, &c->extra_lights_per_light},
+      {"render-file", cli::kOptType_String, c->render_filepath},
+  };
+  uint size = sizeof(opts) / sizeof(opts[0]);
+  uint argi;
+  cli::Status st = ParseOpts(argc, argv, opts, size, &argi);
+  if (st != cli::kStatus_Ok) {
+    std::fprintf(stderr, "Failed to parse options: %s\n",
+                 cli::StatusMessage(st));
+    return kStatus_UnspecifiedError;
+  }
+  if (argi >= argc) {
+    std::fprintf(stderr, "Missing required scene file argument.\n");
+    return kStatus_UnspecifiedError;
+  }
+
+  c->scene_filepath = argv[argi];
+
+  return kStatus_Ok;
+}
+
 int main(int argc, char **argv) {
   glutInit(&argc, argv);
 
-  uint argi;
-  {
-    cli::Opt opts[] = {
-        {"rays-per-pixel", cli::kOptType_Int, &config.rays_per_pixel},
-        {"reflection-bounces", cli::kOptType_Int, &config.reflection_bounces},
-        {"extra-lights-per-light", cli::kOptType_Int,
-         &config.extra_lights_per_light},
-        {"render-file", cli::kOptType_String, config.render_filepath},
-    };
-    uint size = sizeof(opts) / sizeof(opts[0]);
-    cli::Status st = ParseOpts(argc, argv, opts, size, &argi);
-    if (st != cli::kStatus_Ok) {
-      std::fprintf(stderr, "Failed to parse options: %s\n",
-                   cli::StatusMessage(st));
-      return EXIT_FAILURE;
-    }
-    if ((int)argi >= argc) {
-      std::fprintf(stderr, "Missing required scene file argument.\n");
-      return EXIT_FAILURE;
-    }
+  Status st = ParseConfig(argc, argv, &config);
+  if (st != kStatus_Ok) {
+    std::fprintf(stderr, "Failed to parse config.\n");
+    return EXIT_FAILURE;
   }
-
-  const char *scene_filepath = argv[argi];
 
   if (config.render_filepath[0] != '\0') {
     render_mode = kRenderMode_Jpeg;
   }
 
-  Status st = LoadScene(scene_filepath);
+  st = LoadScene(config.scene_filepath);
   if (st != kStatus_Ok) {
     std::fprintf(stderr, "Failed to load scene.\n");
     return EXIT_FAILURE;
