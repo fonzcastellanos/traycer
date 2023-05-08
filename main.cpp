@@ -10,13 +10,11 @@
 #include <OpenGL/gl.h>
 #endif
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #ifdef WIN32
 #define strcasecmp _stricmp
 #endif
 
+#include <cassert>
 #include <cfloat>
 #include <cmath>
 #include <cstdio>
@@ -121,99 +119,278 @@ Status save_jpg() {
   return kStatus_Ok;
 }
 
-void parse_check(const char *expected, char *found) {
-  if (strcasecmp(expected, found)) {
-    printf("Expected '%s ' found '%s '\n", expected, found);
-    printf("Parse error, abnormal abortion\n");
-    exit(0);
+Status ParseField(FILE *f, const char *name, glm::vec3 *vals) {
+  assert(f);
+  assert(name);
+  assert(vals);
+
+  glm::vec3 &v_ = *vals;
+
+  char str[100];
+
+  int rc = std::fscanf(f, "%s", str);
+  if (rc != 1) {
+    std::fprintf(stderr,
+                 "Failed to parse field name. Expected field name \"%s\".\n",
+                 name);
+    return kStatus_IoError;
   }
+
+  if (std::strcmp(name, str) != 0) {
+    std::fprintf(stderr,
+                 "Received field name \"%s\". Expected field name \"%s\".\n",
+                 str, name);
+    // TODO: Choose a better-suited status.
+    return kStatus_UnspecifiedError;
+  };
+
+  rc = std::fscanf(f, "%f %f %f", &v_[0], &v_[1], &v_[2]);
+  if (rc != 3) {
+    std::fprintf(stderr, "Failed to parse values of field \"%s\".\n", name);
+    return kStatus_IoError;
+  }
+
+  std::printf("%s %f %f %f\n", name, v_[0], v_[1], v_[2]);
+
+  return kStatus_Ok;
 }
 
-void parse_floats(FILE *file, const char *check, glm::vec3 &p) {
+Status ParseField(std::FILE *f, const char *name, float *val) {
+  assert(f);
+  assert(name);
+  assert(val);
+
   char str[100];
-  fscanf(file, "%s", str);
-  parse_check(check, str);
-  fscanf(file, "%f %f %f", &p[0], &p[1], &p[2]);
-  printf("%s %f %f %f\n", check, p[0], p[1], p[2]);
+
+  int rc = std::fscanf(f, "%s", str);
+  if (rc != 1) {
+    std::fprintf(stderr,
+                 "Failed to parse field name. Expected field name \"%s\".\n",
+                 name);
+    return kStatus_IoError;
+  }
+
+  if (std::strcmp(name, str) != 0) {
+    std::fprintf(stderr,
+                 "Received field name \"%s\". Expected field name \"%s\".\n",
+                 str, name);
+    // TODO: Choose a better-suited status.
+    return kStatus_UnspecifiedError;
+  };
+
+  rc = std::fscanf(f, "%f", val);
+  if (rc != 1) {
+    std::fprintf(stderr, "Failed to parse value of field \"%s\".\n", name);
+    return kStatus_IoError;
+  }
+
+  std::printf("%s: %f\n", name, *val);
+
+  return kStatus_Ok;
 }
 
-void parse_rad(FILE *file, float *r) {
-  char str[100];
-  fscanf(file, "%s", str);
-  parse_check("rad:", str);
-  fscanf(file, "%f", r);
-  printf("rad: %f\n", *r);
+Status ParseVertex(std::FILE *f, Vertex *v) {
+  assert(f);
+  assert(v);
+
+  Status st = ParseField(f, "pos:", &v->position);
+  if (st != kStatus_Ok) {
+    std::fprintf(stderr, "Failed to parse field.\n");
+    return st;
+  }
+  st = ParseField(f, "nor:", &v->normal);
+  if (st != kStatus_Ok) {
+    std::fprintf(stderr, "Failed to parse field.\n");
+    return st;
+  }
+  st = ParseField(f, "dif:", &v->color_diffuse);
+  if (st != kStatus_Ok) {
+    std::fprintf(stderr, "Failed to parse field.\n");
+    return st;
+  }
+  st = ParseField(f, "spe:", &v->color_specular);
+  if (st != kStatus_Ok) {
+    std::fprintf(stderr, "Failed to parse field.\n");
+    return st;
+  }
+
+  st = ParseField(f, "shi:", &v->shininess);
+  if (st != kStatus_Ok) {
+    std::fprintf(stderr, "Failed to parse field.\n");
+    return st;
+  }
+
+  return kStatus_Ok;
 }
 
-void parse_shi(FILE *file, float *shi) {
-  char s[100];
-  fscanf(file, "%s", s);
-  parse_check("shi:", s);
-  fscanf(file, "%f", shi);
-  printf("shi: %f\n", *shi);
+Status ParseTriangle(std::FILE *f, Triangle *t) {
+  assert(f);
+  assert(t);
+
+  for (uint i = 0; i < 3; ++i) {
+    Status st = ParseVertex(f, &t->v[i]);
+    if (st != kStatus_Ok) {
+      std::fprintf(stderr, "Failed to parse vertex.\n");
+      return st;
+    }
+  }
+
+  return kStatus_Ok;
 }
 
-int loadScene(const char *argv) {
-  FILE *file = fopen(argv, "r");
-  int number_of_objects;
+Status ParseSphere(std::FILE *f, Sphere *s) {
+  assert(f);
+  assert(s);
+
+  Status st = ParseField(f, "pos:", &s->position);
+  if (st != kStatus_Ok) {
+    std::fprintf(stderr, "Failed to parse field.\n");
+    return st;
+  }
+
+  st = ParseField(f, "rad:", &s->radius);
+  if (st != kStatus_Ok) {
+    std::fprintf(stderr, "Failed to parse field.\n");
+    return st;
+  }
+
+  st = ParseField(f, "dif:", &s->color_diffuse);
+  if (st != kStatus_Ok) {
+    std::fprintf(stderr, "Failed to parse field.\n");
+    return st;
+  }
+
+  st = ParseField(f, "spe:", &s->color_specular);
+  if (st != kStatus_Ok) {
+    std::fprintf(stderr, "Failed to parse field.\n");
+    return st;
+  }
+
+  st = ParseField(f, "shi:", &s->shininess);
+  if (st != kStatus_Ok) {
+    std::fprintf(stderr, "Failed to parse field.\n");
+    return st;
+  }
+
+  return kStatus_Ok;
+}
+
+Status ParseLight(std::FILE *f, Light *l) {
+  assert(f);
+  assert(l);
+
+  Status st = ParseField(f, "pos:", &l->position);
+  if (st != kStatus_Ok) {
+    std::fprintf(stderr, "Failed to parse field.\n");
+    return st;
+  }
+
+  st = ParseField(f, "col:", &l->color);
+  if (st != kStatus_Ok) {
+    std::fprintf(stderr, "Failed to parse field.\n");
+    return st;
+  }
+
+  return kStatus_Ok;
+}
+
+Status LoadScene(const char *filepath) {
+  std::FILE *file = std::fopen(filepath, "r");
+  if (!file) {
+    std::fprintf(stderr, "Failed to open file %s.\n", filepath);
+    return kStatus_IoError;
+  }
+
+  uint obj_count;
   char type[50];
   Triangle t;
   Sphere s;
   Light l;
-  fscanf(file, "%i", &number_of_objects);
 
-  printf("number of objects: %i\n", number_of_objects);
+  int rc = std::fscanf(file, "%u", &obj_count);
+  if (rc != 1) {
+    std::fprintf(stderr, "Failed to parse object count from file %s.\n",
+                 filepath);
+    return kStatus_IoError;
+  }
 
-  parse_floats(file, "amb:", ambient_light);
+  std::printf("Object count: %u\n", obj_count);
 
-  for (int i = 0; i < number_of_objects; i++) {
-    fscanf(file, "%s\n", type);
-    printf("%s\n", type);
-    if (strcasecmp(type, "triangle") == 0) {
-      printf("found triangle\n");
-      for (int j = 0; j < 3; j++) {
-        parse_floats(file, "pos:", t.v[j].position);
-        parse_floats(file, "nor:", t.v[j].normal);
-        parse_floats(file, "dif:", t.v[j].color_diffuse);
-        parse_floats(file, "spe:", t.v[j].color_specular);
-        parse_shi(file, &t.v[j].shininess);
+  Status st = ParseField(file, "amb:", &ambient_light);
+  if (st != kStatus_Ok) {
+    std::fprintf(stderr, "Failed to parse field of floats.\n");
+    return kStatus_IoError;
+  }
+
+  for (uint i = 0; i < obj_count; ++i) {
+    int rc = std::fscanf(file, "%s\n", type);
+    if (rc != 1) {
+      std::fprintf(stderr, "Failed to read object type.\n");
+      return kStatus_IoError;
+    }
+
+    std::printf("Object type: %s\n", type);
+
+    if (std::strcmp(type, "triangle") == 0) {
+      st = ParseTriangle(file, &t);
+      if (st != kStatus_Ok) {
+        std::fprintf(stderr, "Failed to parse triangle.\n");
+        return st;
       }
 
       if (num_triangles == MAX_TRIANGLES) {
-        printf("too many triangles, you should increase MAX_TRIANGLES!\n");
-        exit(0);
+        std::fprintf(stderr,
+                     "Too many triangles. Increase MAX_TRIANGLES if more "
+                     "triangles are desired.\n");
+        // TODO: Choose a better-suited status.
+        return kStatus_UnspecifiedError;
       }
-      triangles[num_triangles++] = t;
-    } else if (strcasecmp(type, "sphere") == 0) {
-      printf("found sphere\n");
 
-      parse_floats(file, "pos:", s.position);
-      parse_rad(file, &s.radius);
-      parse_floats(file, "dif:", s.color_diffuse);
-      parse_floats(file, "spe:", s.color_specular);
-      parse_shi(file, &s.shininess);
+      triangles[num_triangles] = t;
+      ++num_triangles;
+    } else if (std::strcmp(type, "sphere") == 0) {
+      st = ParseSphere(file, &s);
+      if (st != kStatus_Ok) {
+        std::fprintf(stderr, "Failed to parse sphere.\n");
+        return st;
+      }
 
       if (num_spheres == MAX_SPHERES) {
-        printf("too many spheres, you should increase MAX_SPHERES!\n");
-        exit(0);
+        std::fprintf(stderr,
+                     "Too many spheres. Increase MAX_SPHERES if more spheres "
+                     "are desired.\n");
+        // TODO: Choose a better-suited status.
+        return kStatus_UnspecifiedError;
       }
-      spheres[num_spheres++] = s;
+
+      spheres[num_spheres] = s;
+      ++num_spheres;
     } else if (strcasecmp(type, "light") == 0) {
-      printf("found light\n");
-      parse_floats(file, "pos:", l.position);
-      parse_floats(file, "col:", l.color);
+      st = ParseLight(file, &l);
+      if (st != kStatus_Ok) {
+        std::fprintf(stderr, "Failed to parse light.\n");
+        return st;
+      }
 
       if (num_lights == MAX_LIGHTS) {
-        printf("too many lights, you should increase MAX_LIGHTS!\n");
-        exit(0);
+        std::fprintf(stderr,
+                     "Too many lights. Increase MAX_LIGHTS if more lights are "
+                     "desired.\n");
+        // TODO: Choose a better-suited status.
+        return kStatus_UnspecifiedError;
       }
-      lights[num_lights++] = l;
+      lights[num_lights] = l;
+      ++num_lights;
     } else {
-      printf("unknown type in scene description:\n%s\n", type);
-      exit(0);
+      std::fprintf(stderr, "Invalid object type \"%s\" in scene file %s\n",
+                   type, filepath);
+
+      // TODO: Choose a better-suited status.
+      return kStatus_UnspecifiedError;
     }
   }
-  return 0;
+
+  return kStatus_Ok;
 }
 
 void display() {}
@@ -259,7 +436,7 @@ Ray **makeRays(SamplingMode mode) {
 
   // Allocate ray array
   Ray **rays = new Ray *[kImgArea];
-  for (int i = 0; i < kImgArea; ++i) {
+  for (uint i = 0; i < kImgArea; ++i) {
     rays[i] = new Ray[rays_per_pixel];
   }
 
@@ -586,24 +763,25 @@ glm::vec3 shade(Intersection *surface, int bounces) {
 int main(int argc, char **argv) {
   glutInit(&argc, argv);
 
-  cli::Opt opts[] = {
-      {"rays-per-pixel", cli::kOptType_Int, &rays_per_pixel},
-      {"reflection-bounces", cli::kOptType_Int, &reflection_bounces},
-      {"extra-lights-per-light", cli::kOptType_Int, &extra_lights_per_light},
-      {"render-file", cli::kOptType_String, render_filepath},
-  };
-
   uint argi;
-  uint opts_size = sizeof(opts) / sizeof(opts[0]);
-  cli::Status status = ParseOpts(argc, argv, opts, opts_size, &argi);
-  if (status != cli::kStatus_Ok) {
-    std::fprintf(stderr, "Failed to parse options: %s\n",
-                 cli::StatusMessage(status));
-    return EXIT_FAILURE;
-  }
-  if (argi >= argc) {
-    std::fprintf(stderr, "Missing required scene file argument.\n");
-    return EXIT_FAILURE;
+  {
+    cli::Opt opts[] = {
+        {"rays-per-pixel", cli::kOptType_Int, &rays_per_pixel},
+        {"reflection-bounces", cli::kOptType_Int, &reflection_bounces},
+        {"extra-lights-per-light", cli::kOptType_Int, &extra_lights_per_light},
+        {"render-file", cli::kOptType_String, render_filepath},
+    };
+    uint size = sizeof(opts) / sizeof(opts[0]);
+    cli::Status st = ParseOpts(argc, argv, opts, size, &argi);
+    if (st != cli::kStatus_Ok) {
+      std::fprintf(stderr, "Failed to parse options: %s\n",
+                   cli::StatusMessage(st));
+      return EXIT_FAILURE;
+    }
+    if ((int)argi >= argc) {
+      std::fprintf(stderr, "Missing required scene file argument.\n");
+      return EXIT_FAILURE;
+    }
   }
 
   const char *scene_filepath = argv[argi];
@@ -612,7 +790,11 @@ int main(int argc, char **argv) {
     render_mode = kRenderMode_Jpeg;
   }
 
-  loadScene(scene_filepath);
+  Status st = LoadScene(scene_filepath);
+  if (st != kStatus_Ok) {
+    std::fprintf(stderr, "Failed to load scene.\n");
+    return EXIT_FAILURE;
+  }
 
   glutInitDisplayMode(GLUT_RGBA | GLUT_SINGLE);
   glutInitWindowPosition(0, 0);
@@ -648,21 +830,19 @@ int main(int argc, char **argv) {
     rays = makeRays(SUPER_JITTER);
   }
 
-  for (int p = 0; p < kImgArea; ++p) {
-    int x = p % IMG_W;
-    int y = p / IMG_W;
-    glm::vec3 totalColor(0.0, 0.0, 0.0);
+  for (uint p = 0; p < kImgArea; ++p) {
+    uint x = p % IMG_W;
+    uint y = p / IMG_W;
+    glm::vec3 totalColor(0, 0, 0);
     for (int r = 0; r < rays_per_pixel; ++r) {
       totalColor += traceRay(&rays[p][r], NULL, reflection_bounces);
     }
-    for (int c = 0; c < 3; ++c) {
+    for (uint c = 0; c < 3; ++c) {
       buffer[y][x][c] =
-          glm::clamp<float>(totalColor[c] / rays_per_pixel, 0.0, 1.0) * 255.0;
+          glm::clamp<float>(totalColor[c] / rays_per_pixel, 0, 1) * 255;
     }
   }
   delete[] rays;
-
-  std::fprintf(stderr, "Hello!!!\n");
 
   glutMainLoop();
 }
