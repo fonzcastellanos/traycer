@@ -10,10 +10,6 @@
 #include <OpenGL/gl.h>
 #endif
 
-#ifdef WIN32
-#define strcasecmp _stricmp
-#endif
-
 #include <cassert>
 #include <cfloat>
 #include <cmath>
@@ -24,9 +20,8 @@
 #include <glm/glm.hpp>
 #include <iostream>
 
-#include "cli.hpp"
-
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "cli.hpp"
 #include "main.hpp"
 #include "stb_image_write.h"
 #include "types.hpp"
@@ -38,14 +33,16 @@
 #define MAX_SPHERES 100
 #define MAX_LIGHTS 100
 
+const char *kWindowName = "traycer";
+
 constexpr uint kImgArea = IMG_W * IMG_H;
 constexpr float kAspectRatio = (float)IMG_W / IMG_H;
 
 const float eps = 0.00000001;
 const glm::vec3 backgroundColor(1.0, 1.0, 1.0);
 
-static RenderMode render_mode = kRenderMode_Display;
 static Config config;
+static RenderMode render_mode = kRenderMode_Display;
 
 // camera field of view
 #define fov 60.0
@@ -361,7 +358,7 @@ Status LoadScene(const char *filepath) {
 
       spheres[num_spheres] = s;
       ++num_spheres;
-    } else if (strcasecmp(type, "light") == 0) {
+    } else if (std::strcmp(type, "light") == 0) {
       st = ParseLight(file, &l);
       if (st != kStatus_Ok) {
         std::fprintf(stderr, "Failed to parse light.\n");
@@ -375,6 +372,7 @@ Status LoadScene(const char *filepath) {
         // TODO: Choose a better-suited status.
         return kStatus_UnspecifiedError;
       }
+
       lights[num_lights] = l;
       ++num_lights;
     } else {
@@ -807,7 +805,8 @@ int main(int argc, char **argv) {
   glutInitDisplayMode(GLUT_RGBA | GLUT_SINGLE);
   glutInitWindowPosition(0, 0);
   glutInitWindowSize(IMG_W, IMG_H);
-  int window = glutCreateWindow("Ray Tracer");
+  // TODO: Destroy window upon exiting program.
+  glutCreateWindow(kWindowName);
   glutDisplayFunc(display);
   glutIdleFunc(idle);
   init();
