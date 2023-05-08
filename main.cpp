@@ -44,17 +44,14 @@ constexpr float kAspectRatio = (float)IMG_W / IMG_H;
 const float eps = 0.00000001;
 const glm::vec3 backgroundColor(1.0, 1.0, 1.0);
 
-static char render_filepath[4096];
-
 static RenderMode render_mode = kRenderMode_Display;
-static int rays_per_pixel;
-static int reflection_bounces;
+static Config config;
 
 // camera field of view
 #define fov 60.0
 
 // camera position
-glm::vec3 camPos(0.0, 0.0, 0.0);
+glm::vec3 camPos(0, 0, 0);
 
 uchar buffer[IMG_H][IMG_W][3];
 
@@ -63,7 +60,6 @@ Sphere spheres[MAX_SPHERES];
 Light lights[MAX_LIGHTS];
 glm::vec3 ambient_light;
 
-static int extra_lights_per_light;
 Light *extraLights[MAX_LIGHTS];
 
 int num_triangles = 0;
@@ -106,13 +102,13 @@ void draw_scene() {
 }
 
 Status save_jpg() {
-  printf("Saving JPEG file: %s\n", render_filepath);
+  printf("Saving JPEG file: %s\n", config.render_filepath);
 
-  int rc = stbi_write_jpg(render_filepath, IMG_W, IMG_H, kRgbChannel__Count,
-                          &buffer[0][0][0], 95);
+  int rc = stbi_write_jpg(config.render_filepath, IMG_W, IMG_H,
+                          kRgbChannel__Count, &buffer[0][0][0], 95);
   if (rc == 0) {
     std::fprintf(stderr, "Could not write data to JPEG file %s\n",
-                 render_filepath);
+                 config.render_filepath);
     return kStatus_IoError;
   }
 
@@ -413,7 +409,8 @@ void idle() {
     if (render_mode == kRenderMode_Jpeg) {
       Status status = save_jpg();
       if (status != kStatus_Ok) {
-        std::fprintf(stderr, "Failed to save JPEG file %s.\n", render_filepath);
+        std::fprintf(stderr, "Failed to save JPEG file %s.\n",
+                     config.render_filepath);
 #ifdef __APPLE__
         exit(EXIT_FAILURE);
 #else
@@ -437,7 +434,7 @@ Ray **makeRays(SamplingMode mode) {
   // Allocate ray array
   Ray **rays = new Ray *[kImgArea];
   for (uint i = 0; i < kImgArea; ++i) {
-    rays[i] = new Ray[rays_per_pixel];
+    rays[i] = new Ray[config.rays_per_pixel];
   }
 
   // Calculate pixel dimensions
@@ -462,7 +459,7 @@ Ray **makeRays(SamplingMode mode) {
     for (float y = bottomRight.y; y < topRight.y - pHeight / 2.0;
          y += pHeight) {
       for (float x = topLeft.x; x < topRight.x - pWidth / 2.0; x += pWidth) {
-        for (int r = 0; r < rays_per_pixel; ++r) {
+        for (int r = 0; r < config.rays_per_pixel; ++r) {
           float xOffset = pWidth * ((float)(std::rand()) / (float)(RAND_MAX));
           float yOffset = pHeight * ((float)(std::rand()) / (float)(RAND_MAX));
           rays[rayInd][r].position = glm::vec3(x + xOffset, y + yOffset, z);
@@ -718,13 +715,13 @@ glm::vec3 shade(Intersection *surface, int bounces) {
                            1.0);
 
     for (int c = 0; c < 3; ++c) {
-      phongColor[c] +=
-          getPhongColor(lights[l].color[c] / (extra_lights_per_light + 1),
-                        color_diffuse[c], color_specular[c], ln, rv, shininess);
+      phongColor[c] += getPhongColor(
+          lights[l].color[c] / (config.extra_lights_per_light + 1),
+          color_diffuse[c], color_specular[c], ln, rv, shininess);
     }
 
     // launch extra shadow rays
-    for (int e = 0; e < extra_lights_per_light; ++e) {
+    for (int e = 0; e < config.extra_lights_per_light; ++e) {
       shadow.position = p;
       shadow.direction = glm::normalize(extraLights[l][e].position - p);
 
@@ -740,8 +737,8 @@ glm::vec3 shade(Intersection *surface, int bounces) {
 
       for (int c = 0; c < 3; ++c) {
         phongColor[c] += getPhongColor(
-            lights[l].color[c] / (extra_lights_per_light + 1), color_diffuse[c],
-            color_specular[c], ln, rv, shininess);
+            lights[l].color[c] / (config.extra_lights_per_light + 1),
+            color_diffuse[c], color_specular[c], ln, rv, shininess);
       }
     }
   }
@@ -766,10 +763,11 @@ int main(int argc, char **argv) {
   uint argi;
   {
     cli::Opt opts[] = {
-        {"rays-per-pixel", cli::kOptType_Int, &rays_per_pixel},
-        {"reflection-bounces", cli::kOptType_Int, &reflection_bounces},
-        {"extra-lights-per-light", cli::kOptType_Int, &extra_lights_per_light},
-        {"render-file", cli::kOptType_String, render_filepath},
+        {"rays-per-pixel", cli::kOptType_Int, &config.rays_per_pixel},
+        {"reflection-bounces", cli::kOptType_Int, &config.reflection_bounces},
+        {"extra-lights-per-light", cli::kOptType_Int,
+         &config.extra_lights_per_light},
+        {"render-file", cli::kOptType_String, config.render_filepath},
     };
     uint size = sizeof(opts) / sizeof(opts[0]);
     cli::Status st = ParseOpts(argc, argv, opts, size, &argi);
@@ -786,7 +784,7 @@ int main(int argc, char **argv) {
 
   const char *scene_filepath = argv[argi];
 
-  if (render_filepath[0] != '\0') {
+  if (config.render_filepath[0] != '\0') {
     render_mode = kRenderMode_Jpeg;
   }
 
@@ -804,11 +802,11 @@ int main(int argc, char **argv) {
   glutIdleFunc(idle);
   init();
 
-  if (extra_lights_per_light > 0) {
+  if (config.extra_lights_per_light > 0) {
     std::srand(std::time(NULL));
     for (int l = 0; l < num_lights; ++l) {
-      extraLights[l] = new Light[extra_lights_per_light];
-      for (int e = 0; e < extra_lights_per_light; ++e) {
+      extraLights[l] = new Light[config.extra_lights_per_light];
+      for (int e = 0; e < config.extra_lights_per_light; ++e) {
         float xOffset =
             (-1.0 + 2.0 * ((float)(std::rand()) / (float)(RAND_MAX)));
         float yOffset =
@@ -824,9 +822,9 @@ int main(int argc, char **argv) {
   }
 
   Ray **rays = NULL;
-  if (rays_per_pixel == 1) {
+  if (config.rays_per_pixel == 1) {
     rays = makeRays(DEFAULT);
-  } else if (rays_per_pixel > 1) {
+  } else if (config.rays_per_pixel > 1) {
     rays = makeRays(SUPER_JITTER);
   }
 
@@ -834,12 +832,12 @@ int main(int argc, char **argv) {
     uint x = p % IMG_W;
     uint y = p / IMG_W;
     glm::vec3 totalColor(0, 0, 0);
-    for (int r = 0; r < rays_per_pixel; ++r) {
-      totalColor += traceRay(&rays[p][r], NULL, reflection_bounces);
+    for (int r = 0; r < config.rays_per_pixel; ++r) {
+      totalColor += traceRay(&rays[p][r], NULL, config.reflection_bounces);
     }
     for (uint c = 0; c < 3; ++c) {
       buffer[y][x][c] =
-          glm::clamp<float>(totalColor[c] / rays_per_pixel, 0, 1) * 255;
+          glm::clamp<float>(totalColor[c] / config.rays_per_pixel, 0, 1) * 255;
     }
   }
   delete[] rays;

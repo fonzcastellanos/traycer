@@ -3,11 +3,20 @@
 
 #include <glm/glm/vec3.hpp>
 
+#define FILEPATH_BUFFER_SIZE 4096
+
 enum Status {
   kStatus_Ok,
   kStatus_UnspecifiedError,
   kStatus_IoError,
   kStatus_GlError
+};
+
+struct Config {
+  int rays_per_pixel;
+  int reflection_bounces;
+  int extra_lights_per_light;
+  char render_filepath[FILEPATH_BUFFER_SIZE];
 };
 
 enum RgbChannel {
