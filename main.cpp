@@ -18,7 +18,6 @@
 #include <cstring>
 #include <ctime>
 #include <glm/glm.hpp>
-#include <iostream>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "cli.hpp"
