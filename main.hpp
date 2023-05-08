@@ -2,6 +2,7 @@
 #define TRAYCER_MAIN_HPP
 
 #include <glm/glm/vec3.hpp>
+#include <vector>
 
 #define FILEPATH_BUFFER_SIZE 4096
 
@@ -16,7 +17,7 @@ struct Config {
   char *scene_filepath;
   int rays_per_pixel;
   int reflection_bounces;
-  int extra_lights_per_light;
+  uint extra_lights_per_light;
   char render_filepath[FILEPATH_BUFFER_SIZE];
 };
 
@@ -50,6 +51,11 @@ struct Sphere {
 struct Light {
   glm::vec3 position;
   glm::vec3 color;
+};
+
+struct Lights {
+  std::vector<glm::vec3> positions;
+  std::vector<glm::vec3> colors;
 };
 
 struct Ray {

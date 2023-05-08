@@ -19,6 +19,7 @@
 #include <ctime>
 #include <glm/glm.hpp>
 #include <random>
+#include <vector>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "cli.hpp"
@@ -33,19 +34,19 @@
 #define MAX_SPHERES 100
 #define MAX_LIGHTS 100
 
+// camera field of view
+#define fov 60.0
+
 const char *kWindowName = "traycer";
 
 constexpr uint kImgArea = IMG_W * IMG_H;
 constexpr float kAspectRatio = (float)IMG_W / IMG_H;
 
 const float eps = 0.00000001;
-const glm::vec3 backgroundColor(1.0, 1.0, 1.0);
+const glm::vec3 backgroundColor(1, 1, 1);
 
 static Config config;
 static RenderMode render_mode = kRenderMode_Display;
-
-// camera field of view
-#define fov 60.0
 
 // camera position
 glm::vec3 camPos(0, 0, 0);
@@ -57,11 +58,8 @@ Sphere spheres[MAX_SPHERES];
 Light lights[MAX_LIGHTS];
 glm::vec3 ambient_light;
 
-Light *extraLights[MAX_LIGHTS];
-
 int num_triangles = 0;
 int num_spheres = 0;
-int num_lights = 0;
 
 void plot_pixel_display(int x, int y, unsigned char r, unsigned char g,
                         unsigned char b) {
@@ -287,7 +285,10 @@ Status ParseLight(std::FILE *f, Light *l) {
   return kStatus_Ok;
 }
 
-Status LoadScene(const char *filepath) {
+Status LoadScene(const char *filepath, uint *light_count) {
+  assert(filepath);
+  assert(light_count);
+
   std::FILE *file = std::fopen(filepath, "r");
   if (!file) {
     std::fprintf(stderr, "Failed to open file %s.\n", filepath);
@@ -365,7 +366,7 @@ Status LoadScene(const char *filepath) {
         return st;
       }
 
-      if (num_lights == MAX_LIGHTS) {
+      if (*light_count == MAX_LIGHTS) {
         std::fprintf(stderr,
                      "Too many lights. Increase MAX_LIGHTS if more lights are "
                      "desired.\n");
@@ -373,8 +374,8 @@ Status LoadScene(const char *filepath) {
         return kStatus_UnspecifiedError;
       }
 
-      lights[num_lights] = l;
-      ++num_lights;
+      lights[*light_count] = l;
+      ++(*light_count);
     } else {
       std::fprintf(stderr, "Invalid object type \"%s\" in scene file %s\n",
                    type, filepath);
@@ -635,19 +636,22 @@ float getPhongColor(float lightColor, float diffuse, float specular, float ln,
   return lightColor * (diffuse * ln + specular * glm::pow(rv, shininess));
 }
 
-glm::vec3 shade(Intersection *surface, int bounces);
+glm::vec3 shade(Intersection *surface, int bounces, uint light_count,
+                const Lights *extra_lights);
 
-glm::vec3 traceRay(Ray *ray, Intersection *prev, int bounces) {
+glm::vec3 traceRay(Ray *ray, Intersection *prev, int bounces, uint light_count,
+                   const Lights *extra_lights) {
   Intersection closest;
   intersect(ray, prev, &closest);
   if (!closest.hit) {
     return backgroundColor;
   } else {
-    return shade(&closest, bounces);
+    return shade(&closest, bounces, light_count, extra_lights);
   }
 }
 
-glm::vec3 shade(Intersection *surface, int bounces) {
+glm::vec3 shade(Intersection *surface, int bounces, uint light_count,
+                const Lights *extra_lights) {
   int index;
   glm::vec3 p;  // point of intersection
   glm::vec3 n;  // normal;
@@ -697,7 +701,7 @@ glm::vec3 shade(Intersection *surface, int bounces) {
   glm::vec3 phongColor = ambient_light;
   float ln, rv;
   glm::vec3 reflection;
-  for (int l = 0; l < num_lights; ++l) {
+  for (uint l = 0; l < light_count; ++l) {
     // launch main shadow ray
     shadow.position = p;
     shadow.direction = glm::normalize(lights[l].position - p);
@@ -719,13 +723,14 @@ glm::vec3 shade(Intersection *surface, int bounces) {
     }
 
     // launch extra shadow rays
-    for (int e = 0; e < config.extra_lights_per_light; ++e) {
+    for (uint e = 0; e < config.extra_lights_per_light; ++e) {
       shadow.position = p;
-      shadow.direction = glm::normalize(extraLights[l][e].position - p);
+      uint k = l * config.extra_lights_per_light + e;
+      shadow.direction = glm::normalize(extra_lights->positions[k] - p);
 
       intersect(&shadow, surface, &occluder);
 
-      toLight = glm::length(extraLights[l][e].position - shadow.position);
+      toLight = glm::length(extra_lights->positions[k] - shadow.position);
       if (occluder.hit && occluder.t + eps < toLight) continue;
 
       ln = glm::clamp<float>(glm::dot(shadow.direction, n), 0.0, 1.0);
@@ -745,7 +750,8 @@ glm::vec3 shade(Intersection *surface, int bounces) {
   if (bounces > 0) {
     Ray reflectedRay;
     getReflectedRay(surface->ray, surface, &reflectedRay);
-    glm::vec3 reflectedColor = traceRay(&reflectedRay, surface, bounces - 1);
+    glm::vec3 reflectedColor = traceRay(&reflectedRay, surface, bounces - 1,
+                                        light_count, extra_lights);
     for (int c = 0; c < 3; ++c) {
       phongColor[c] *= (1 - color_specular[c]);
       phongColor[c] += color_specular[c] * reflectedColor[c];
@@ -762,7 +768,8 @@ Status ParseConfig(uint argc, char *argv[], Config *c) {
   cli::Opt opts[] = {
       {"rays-per-pixel", cli::kOptType_Int, &c->rays_per_pixel},
       {"reflection-bounces", cli::kOptType_Int, &c->reflection_bounces},
-      {"extra-lights-per-light", cli::kOptType_Int, &c->extra_lights_per_light},
+      {"extra-lights-per-light", cli::kOptType_Uint,
+       &c->extra_lights_per_light},
       {"render-file", cli::kOptType_String, c->render_filepath},
   };
   uint size = sizeof(opts) / sizeof(opts[0]);
@@ -796,7 +803,9 @@ int main(int argc, char **argv) {
     render_mode = kRenderMode_Jpeg;
   }
 
-  st = LoadScene(config.scene_filepath);
+  uint light_count;
+
+  st = LoadScene(config.scene_filepath, &light_count);
   if (st != kStatus_Ok) {
     std::fprintf(stderr, "Failed to load scene.\n");
     return EXIT_FAILURE;
@@ -811,21 +820,26 @@ int main(int argc, char **argv) {
   glutIdleFunc(idle);
   init();
 
+  Lights extra_lights;
+
   if (config.extra_lights_per_light > 0) {
     std::default_random_engine re(std::random_device{}());
-    std::uniform_real_distribution<float> distrib(0, 1);
+    std::uniform_real_distribution<float> distrib(-1, 1);
 
-    for (int l = 0; l < num_lights; ++l) {
-      extraLights[l] = new Light[config.extra_lights_per_light];
-      for (int e = 0; e < config.extra_lights_per_light; ++e) {
-        float x_offset = -1 + 2 * distrib(re);
-        float y_offset = -1 + 2 * distrib(re);
-        // float zOffset = (-1.0
-        // + 2.0*((float)(std::rand())/(float)(RAND_MAX)));
-        glm::vec3 offset(x_offset, y_offset, 0);
+    uint count = light_count * config.extra_lights_per_light;
+    extra_lights.positions.resize(count);
+    extra_lights.colors.resize(count);
 
-        extraLights[l][e].position = lights[l].position + offset;
-        extraLights[l][e].color = lights[l].color;
+    for (uint i = 0; i < light_count; ++i) {
+      for (uint j = 0; j < config.extra_lights_per_light; ++j) {
+        float x = distrib(re);
+        float y = distrib(re);
+        glm::vec3 offset(x, y, 0);
+
+        uint k = i * config.extra_lights_per_light + j;
+
+        extra_lights.positions[k] = lights[i].position + offset;
+        extra_lights.colors[k] = lights[i].color;
       }
     }
   }
@@ -842,7 +856,8 @@ int main(int argc, char **argv) {
     uint y = p / IMG_W;
     glm::vec3 totalColor(0, 0, 0);
     for (int r = 0; r < config.rays_per_pixel; ++r) {
-      totalColor += traceRay(&rays[p][r], NULL, config.reflection_bounces);
+      totalColor += traceRay(&rays[p][r], NULL, config.reflection_bounces,
+                             light_count, &extra_lights);
     }
     for (uint c = 0; c < 3; ++c) {
       buffer[y][x][c] =
