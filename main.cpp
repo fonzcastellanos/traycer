@@ -18,6 +18,7 @@
 #include <cstring>
 #include <ctime>
 #include <glm/glm.hpp>
+#include <random>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "cli.hpp"
@@ -811,17 +812,17 @@ int main(int argc, char **argv) {
   init();
 
   if (config.extra_lights_per_light > 0) {
-    std::srand(std::time(NULL));
+    std::default_random_engine re(std::random_device{}());
+    std::uniform_real_distribution<float> distrib(0, 1);
+
     for (int l = 0; l < num_lights; ++l) {
       extraLights[l] = new Light[config.extra_lights_per_light];
       for (int e = 0; e < config.extra_lights_per_light; ++e) {
-        float xOffset =
-            (-1.0 + 2.0 * ((float)(std::rand()) / (float)(RAND_MAX)));
-        float yOffset =
-            (-1.0 + 2.0 * ((float)(std::rand()) / (float)(RAND_MAX)));
+        float x_offset = -1 + 2 * distrib(re);
+        float y_offset = -1 + 2 * distrib(re);
         // float zOffset = (-1.0
         // + 2.0*((float)(std::rand())/(float)(RAND_MAX)));
-        glm::vec3 offset(xOffset, yOffset, 0.0);
+        glm::vec3 offset(x_offset, y_offset, 0);
 
         extraLights[l][e].position = lights[l].position + offset;
         extraLights[l][e].color = lights[l].color;
