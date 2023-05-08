@@ -21,51 +21,36 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 #include <glm/glm.hpp>
 #include <iostream>
 
+#include "cli.hpp"
+
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "main.hpp"
 #include "stb_image_write.h"
+#include "types.hpp"
+
+#define IMG_W 640
+#define IMG_H 480
 
 #define MAX_TRIANGLES 20000
 #define MAX_SPHERES 100
 #define MAX_LIGHTS 100
 
-enum RgbChannel {
-  kRgbChannel_Red,
-  kRgbChannel_Green,
-  kRgbChannel_Blue,
-  kRgbChannel__Count
-};
-
-enum Status {
-  kStatus_Ok,
-  kStatus_UnspecifiedError,
-  kStatus_IoError,
-  kStatus_GlError
-};
-
-char *filename = NULL;
-
-// different display modes
-#define MODE_DISPLAY 1
-#define MODE_JPEG 2
-
-int mode = MODE_DISPLAY;
-
-// you may want to make these smaller for debugging purposes
-#define WIDTH 640
-#define HEIGHT 480
-
-const int numPixels = WIDTH * HEIGHT;
-const float aspectRatio = (float)WIDTH / HEIGHT;
+constexpr uint kImgArea = IMG_W * IMG_H;
+constexpr float kAspectRatio = (float)IMG_W / IMG_H;
 
 const float eps = 0.00000001;
 const glm::vec3 backgroundColor(1.0, 1.0, 1.0);
 
-int raysPerPixel = 0;
-int reflectionBounces = 0;
+static char render_filepath[4096];
+
+static RenderMode render_mode = kRenderMode_Display;
+static int rays_per_pixel;
+static int reflection_bounces;
 
 // camera field of view
 #define fov 60.0
@@ -73,117 +58,19 @@ int reflectionBounces = 0;
 // camera position
 glm::vec3 camPos(0.0, 0.0, 0.0);
 
-unsigned char buffer[HEIGHT][WIDTH][3];
-
-struct Vertex {
-  glm::vec3 position;
-  glm::vec3 color_diffuse;
-  glm::vec3 color_specular;
-  glm::vec3 normal;
-  float shininess;
-};
-
-struct Triangle {
-  Vertex v[3];
-};
-
-struct Sphere {
-  glm::vec3 position;
-  glm::vec3 color_diffuse;
-  glm::vec3 color_specular;
-  float shininess;
-  float radius;
-};
-
-struct Light {
-  glm::vec3 position;
-  glm::vec3 color;
-};
+uchar buffer[IMG_H][IMG_W][3];
 
 Triangle triangles[MAX_TRIANGLES];
 Sphere spheres[MAX_SPHERES];
 Light lights[MAX_LIGHTS];
 glm::vec3 ambient_light;
 
-int numExtraLights;
+static int extra_lights_per_light;
 Light *extraLights[MAX_LIGHTS];
 
 int num_triangles = 0;
 int num_spheres = 0;
 int num_lights = 0;
-
-struct Ray {
-  glm::vec3 position;
-  glm::vec3 direction;
-};
-
-enum ObjectType { SPHERE, TRIANGLE };
-
-struct TriangleData {
-  int index;
-  float alpha;
-  float beta;
-  float gamma;
-};
-
-struct SphereData {
-  int index;
-};
-
-union ObjectData {
-  SphereData sphere;
-  TriangleData triangle;
-};
-
-struct Intersection {
-  ObjectType type;
-  ObjectData data;
-  Ray *ray;
-  float t;
-  bool hit;
-};
-
-enum SamplingMode { DEFAULT, SUPER_JITTER };
-
-void draw_scene();
-void plot_pixel_display(int x, int y, unsigned char r, unsigned char g,
-                        unsigned char b);
-void plot_pixel_jpeg(int x, int y, unsigned char r, unsigned char g,
-                     unsigned char b);
-void plot_pixel(int x, int y, unsigned char r, unsigned char g,
-                unsigned char b);
-Status save_jpg();
-void parse_check(const char *expected, char *found);
-void parse_floats(FILE *file, const char *check, glm::vec3 &p);
-void parse_rad(FILE *file, float *r);
-void parse_shi(FILE *file, float *shi);
-int loadScene(char *argv);
-void display();
-void init();
-void idle();
-Ray **makeRays(SamplingMode mode);
-void getReflectedRay(Ray *ray, Intersection *in, Ray *reflectedRay);
-void sphereIntersect(Ray *ray, int s, Intersection *out);
-void triangleIntersect(Ray *ray, int tri, Intersection *out);
-void intersect(Ray *ray, Intersection *prev, Intersection *out);
-float getPhongColor(float lightColor, float diffuse, float specular, float ln,
-                    float rv, float shininess);
-glm::vec3 traceRay(Ray *ray, Intersection *prev, int bounces);
-glm::vec3 shade(Intersection *surface, int bounces);
-
-void draw_scene() {
-  for (unsigned int x = 0; x < WIDTH; x++) {
-    glPointSize(2.0);
-    glBegin(GL_POINTS);
-    for (unsigned int y = 0; y < HEIGHT; y++) {
-      plot_pixel(x, y, buffer[y][x][0], buffer[y][x][1], buffer[y][x][2]);
-    }
-    glEnd();
-    glFlush();
-  }
-  printf("Done!\n");
-  fflush(stdout);
-}
 
 void plot_pixel_display(int x, int y, unsigned char r, unsigned char g,
                         unsigned char b) {
@@ -201,16 +88,33 @@ void plot_pixel_jpeg(int x, int y, unsigned char r, unsigned char g,
 void plot_pixel(int x, int y, unsigned char r, unsigned char g,
                 unsigned char b) {
   plot_pixel_display(x, y, r, g, b);
-  if (mode == MODE_JPEG) plot_pixel_jpeg(x, y, r, g, b);
+  if (render_mode == kRenderMode_Jpeg) {
+    plot_pixel_jpeg(x, y, r, g, b);
+  }
+}
+
+void draw_scene() {
+  for (unsigned int x = 0; x < IMG_W; x++) {
+    glPointSize(2.0);
+    glBegin(GL_POINTS);
+    for (unsigned int y = 0; y < IMG_H; y++) {
+      plot_pixel(x, y, buffer[y][x][0], buffer[y][x][1], buffer[y][x][2]);
+    }
+    glEnd();
+    glFlush();
+  }
+  printf("Done!\n");
+  fflush(stdout);
 }
 
 Status save_jpg() {
-  printf("Saving JPEG file: %s\n", filename);
+  printf("Saving JPEG file: %s\n", render_filepath);
 
-  int rc = stbi_write_jpg(filename, WIDTH, HEIGHT, kRgbChannel__Count,
+  int rc = stbi_write_jpg(render_filepath, IMG_W, IMG_H, kRgbChannel__Count,
                           &buffer[0][0][0], 95);
   if (rc == 0) {
-    std::fprintf(stderr, "Could not write data to JPEG file %s\n", filename);
+    std::fprintf(stderr, "Could not write data to JPEG file %s\n",
+                 render_filepath);
     return kStatus_IoError;
   }
 
@@ -249,7 +153,7 @@ void parse_shi(FILE *file, float *shi) {
   printf("shi: %f\n", *shi);
 }
 
-int loadScene(char *argv) {
+int loadScene(const char *argv) {
   FILE *file = fopen(argv, "r");
   int number_of_objects;
   char type[50];
@@ -316,7 +220,7 @@ void display() {}
 
 void init() {
   glMatrixMode(GL_PROJECTION);
-  glOrtho(0, WIDTH, 0, HEIGHT, 1, -1);
+  glOrtho(0, IMG_W, 0, IMG_H, 1, -1);
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
 
@@ -329,10 +233,10 @@ void idle() {
   static int once = 0;
   if (!once) {
     draw_scene();
-    if (mode == MODE_JPEG) {
+    if (render_mode == kRenderMode_Jpeg) {
       Status status = save_jpg();
       if (status != kStatus_Ok) {
-        std::fprintf(stderr, "Failed to save JPEG file %s.\n", filename);
+        std::fprintf(stderr, "Failed to save JPEG file %s.\n", render_filepath);
 #ifdef __APPLE__
         exit(EXIT_FAILURE);
 #else
@@ -348,20 +252,20 @@ Ray **makeRays(SamplingMode mode) {
   // Generate image plane corners
   const float z = -1.0;
   float tanHalfFOV = glm::tan((fov / 2.0) * (M_PI / 180.0));
-  glm::vec3 topRight(aspectRatio * tanHalfFOV, tanHalfFOV, z);
-  glm::vec3 topLeft(-aspectRatio * tanHalfFOV, tanHalfFOV, z);
-  glm::vec3 bottomRight(aspectRatio * tanHalfFOV, -tanHalfFOV, z);
-  glm::vec3 bottomLeft(-aspectRatio * tanHalfFOV, -tanHalfFOV, z);
+  glm::vec3 topRight(kAspectRatio * tanHalfFOV, tanHalfFOV, z);
+  glm::vec3 topLeft(-kAspectRatio * tanHalfFOV, tanHalfFOV, z);
+  glm::vec3 bottomRight(kAspectRatio * tanHalfFOV, -tanHalfFOV, z);
+  glm::vec3 bottomLeft(-kAspectRatio * tanHalfFOV, -tanHalfFOV, z);
 
   // Allocate ray array
-  Ray **rays = new Ray *[numPixels];
-  for (int i = 0; i < numPixels; ++i) {
-    rays[i] = new Ray[raysPerPixel];
+  Ray **rays = new Ray *[kImgArea];
+  for (int i = 0; i < kImgArea; ++i) {
+    rays[i] = new Ray[rays_per_pixel];
   }
 
   // Calculate pixel dimensions
-  float pWidth = (topRight.x - topLeft.x) / WIDTH;
-  float pHeight = (topRight.y - bottomRight.y) / HEIGHT;
+  float pWidth = (topRight.x - topLeft.x) / IMG_W;
+  float pHeight = (topRight.y - bottomRight.y) / IMG_H;
 
   // Sample
   int rayInd = 0;
@@ -381,7 +285,7 @@ Ray **makeRays(SamplingMode mode) {
     for (float y = bottomRight.y; y < topRight.y - pHeight / 2.0;
          y += pHeight) {
       for (float x = topLeft.x; x < topRight.x - pWidth / 2.0; x += pWidth) {
-        for (int r = 0; r < raysPerPixel; ++r) {
+        for (int r = 0; r < rays_per_pixel; ++r) {
           float xOffset = pWidth * ((float)(std::rand()) / (float)(RAND_MAX));
           float yOffset = pHeight * ((float)(std::rand()) / (float)(RAND_MAX));
           rays[rayInd][r].position = glm::vec3(x + xOffset, y + yOffset, z);
@@ -559,6 +463,8 @@ float getPhongColor(float lightColor, float diffuse, float specular, float ln,
   return lightColor * (diffuse * ln + specular * glm::pow(rv, shininess));
 }
 
+glm::vec3 shade(Intersection *surface, int bounces);
+
 glm::vec3 traceRay(Ray *ray, Intersection *prev, int bounces) {
   Intersection closest;
   intersect(ray, prev, &closest);
@@ -636,12 +542,12 @@ glm::vec3 shade(Intersection *surface, int bounces) {
 
     for (int c = 0; c < 3; ++c) {
       phongColor[c] +=
-          getPhongColor(lights[l].color[c] / (numExtraLights + 1),
+          getPhongColor(lights[l].color[c] / (extra_lights_per_light + 1),
                         color_diffuse[c], color_specular[c], ln, rv, shininess);
     }
 
     // launch extra shadow rays
-    for (int e = 0; e < numExtraLights; ++e) {
+    for (int e = 0; e < extra_lights_per_light; ++e) {
       shadow.position = p;
       shadow.direction = glm::normalize(extraLights[l][e].position - p);
 
@@ -657,7 +563,7 @@ glm::vec3 shade(Intersection *surface, int bounces) {
 
       for (int c = 0; c < 3; ++c) {
         phongColor[c] += getPhongColor(
-            lights[l].color[c] / (numExtraLights + 1), color_diffuse[c],
+            lights[l].color[c] / (extra_lights_per_light + 1), color_diffuse[c],
             color_specular[c], ln, rv, shininess);
       }
     }
@@ -678,41 +584,49 @@ glm::vec3 shade(Intersection *surface, int bounces) {
 }
 
 int main(int argc, char **argv) {
-  if ((argc < 5) || (argc > 6)) {
-    printf(
-        "Usage: %s <input scenefile> <rays per pixel> <reflection bounces> "
-        "<extra lights per light> [output jpegname] \n",
-        argv[0]);
-    exit(0);
-  }
-  if (argc == 6) {
-    mode = MODE_JPEG;
-    filename = argv[5];
-  } else if (argc == 5) {
-    mode = MODE_DISPLAY;
-  }
-  raysPerPixel = std::atoi(argv[2]);
-  reflectionBounces = std::atoi(argv[3]);
-  numExtraLights = std::atoi(argv[4]);
-
   glutInit(&argc, argv);
-  loadScene(argv[1]);
+
+  cli::Opt opts[] = {
+      {"rays-per-pixel", cli::kOptType_Int, &rays_per_pixel},
+      {"reflection-bounces", cli::kOptType_Int, &reflection_bounces},
+      {"extra-lights-per-light", cli::kOptType_Int, &extra_lights_per_light},
+      {"render-file", cli::kOptType_String, render_filepath},
+  };
+
+  uint argi;
+  uint opts_size = sizeof(opts) / sizeof(opts[0]);
+  cli::Status status = ParseOpts(argc, argv, opts, opts_size, &argi);
+  if (status != cli::kStatus_Ok) {
+    std::fprintf(stderr, "Failed to parse options: %s\n",
+                 cli::StatusMessage(status));
+    return EXIT_FAILURE;
+  }
+  if (argi >= argc) {
+    std::fprintf(stderr, "Missing required scene file argument.\n");
+    return EXIT_FAILURE;
+  }
+
+  const char *scene_filepath = argv[argi];
+
+  if (render_filepath[0] != '\0') {
+    render_mode = kRenderMode_Jpeg;
+  }
+
+  loadScene(scene_filepath);
 
   glutInitDisplayMode(GLUT_RGBA | GLUT_SINGLE);
   glutInitWindowPosition(0, 0);
-  glutInitWindowSize(WIDTH, HEIGHT);
+  glutInitWindowSize(IMG_W, IMG_H);
   int window = glutCreateWindow("Ray Tracer");
   glutDisplayFunc(display);
   glutIdleFunc(idle);
   init();
 
-  std::fprintf(stderr, "After init().\n");
-
-  if (numExtraLights > 0) {
+  if (extra_lights_per_light > 0) {
     std::srand(std::time(NULL));
     for (int l = 0; l < num_lights; ++l) {
-      extraLights[l] = new Light[numExtraLights];
-      for (int e = 0; e < numExtraLights; ++e) {
+      extraLights[l] = new Light[extra_lights_per_light];
+      for (int e = 0; e < extra_lights_per_light; ++e) {
         float xOffset =
             (-1.0 + 2.0 * ((float)(std::rand()) / (float)(RAND_MAX)));
         float yOffset =
@@ -728,22 +642,22 @@ int main(int argc, char **argv) {
   }
 
   Ray **rays = NULL;
-  if (raysPerPixel == 1) {
+  if (rays_per_pixel == 1) {
     rays = makeRays(DEFAULT);
-  } else if (raysPerPixel > 1) {
+  } else if (rays_per_pixel > 1) {
     rays = makeRays(SUPER_JITTER);
   }
 
-  for (int p = 0; p < numPixels; ++p) {
-    int x = p % WIDTH;
-    int y = p / WIDTH;
+  for (int p = 0; p < kImgArea; ++p) {
+    int x = p % IMG_W;
+    int y = p / IMG_W;
     glm::vec3 totalColor(0.0, 0.0, 0.0);
-    for (int r = 0; r < raysPerPixel; ++r) {
-      totalColor += traceRay(&rays[p][r], NULL, reflectionBounces);
+    for (int r = 0; r < rays_per_pixel; ++r) {
+      totalColor += traceRay(&rays[p][r], NULL, reflection_bounces);
     }
     for (int c = 0; c < 3; ++c) {
       buffer[y][x][c] =
-          glm::clamp<float>(totalColor[c] / raysPerPixel, 0.0, 1.0) * 255.0;
+          glm::clamp<float>(totalColor[c] / rays_per_pixel, 0.0, 1.0) * 255.0;
     }
   }
   delete[] rays;
