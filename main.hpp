@@ -57,7 +57,7 @@ struct Intersection {
   bool hit;
 };
 
-enum SamplingMode { DEFAULT, SUPER_JITTER };
+enum SamplingMode { kSamplingMode_Default, kSamplingMode_Jitter };
 
 enum RenderTarget {
   kRenderTarget_Window,

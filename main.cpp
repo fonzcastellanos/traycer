@@ -27,11 +27,12 @@
 #include "stb_image_write.h"
 #include "types.hpp"
 
+#define PI 3.14159
+
 #define IMG_W 640
 #define IMG_H 480
 
-// camera field of view
-#define fov 60.0
+#define FOV 60
 
 const char *kWindowName = "traycer";
 
@@ -136,51 +137,63 @@ void idle() {
   once = 1;
 }
 
-Ray **MakeRays(SamplingMode mode) {
-  // Generate image plane corners
-  constexpr float z = -1;
-  float tan_half_fov = glm::tan(((float)fov / 2) * ((float)M_PI / 180));
-  glm::vec3 tr(kAspectRatio * tan_half_fov, tan_half_fov, z);
-  glm::vec3 tl(-kAspectRatio * tan_half_fov, tan_half_fov, z);
-  glm::vec3 br(kAspectRatio * tan_half_fov, -tan_half_fov, z);
-  glm::vec3 bl(-kAspectRatio * tan_half_fov, -tan_half_fov, z);
+Ray **MakeRays(SamplingMode mode, uint w, uint h, float fov) {
+  // Calculate image plane corners.
+  constexpr float kZ = -1;
+  float aspect = (float)w / h;
+  float tan_half_fov = glm::tan((fov / 2) * ((float)PI / 180));
+  glm::vec3 tr(aspect * tan_half_fov, tan_half_fov, kZ);
+  glm::vec3 tl(-aspect * tan_half_fov, tan_half_fov, kZ);
+  glm::vec3 br(aspect * tan_half_fov, -tan_half_fov, kZ);
+  glm::vec3 bl(-aspect * tan_half_fov, -tan_half_fov, kZ);
 
-  Ray **rays = new Ray *[kImgArea];
-  for (uint i = 0; i < kImgArea; ++i) {
+  uint pixel_count = w * h;
+
+  Ray **rays = new Ray *[pixel_count];
+  for (uint i = 0; i < pixel_count; ++i) {
     rays[i] = new Ray[config.rays_per_pixel];
   }
 
-  float pix_w = (tr.x - tl.x) / IMG_W;
-  float pix_h = (tr.y - br.y) / IMG_H;
+  float pix_w = (tr.x - tl.x) / w;
+  float pix_h = (tr.y - br.y) / h;
 
-  // Sample
-  int ray_idx = 0;
-  if (mode == DEFAULT) {
-    for (float y = br.y; y < tr.y - pix_h / 2.0; y += pix_h) {
-      for (float x = tl.x; x < tr.x - pix_w / 2.0; x += pix_w) {
-        rays[ray_idx][0].position =
-            glm::vec3(x + pix_w / 2.0, y + pix_h / 2.0, z);
-        rays[ray_idx][0].direction =
-            glm::normalize(rays[ray_idx][0].position - camera_position);
-        ++ray_idx;
-      }
-    }
-  } else if (mode == SUPER_JITTER) {
-    std::default_random_engine re(std::random_device{}());
-    std::uniform_real_distribution<float> distrib(0, 1);
-    for (float y = br.y; y < tr.y - pix_h / 2.0; y += pix_h) {
-      for (float x = tl.x; x < tr.x - pix_w / 2.0; x += pix_w) {
-        for (int r = 0; r < config.rays_per_pixel; ++r) {
-          float x_offset = pix_w * distrib(re);
-          float y_offset = pix_h * distrib(re);
-          rays[ray_idx][r].position = glm::vec3(x + x_offset, y + y_offset, z);
-          rays[ray_idx][r].direction =
-              glm::normalize(rays[ray_idx][r].position - camera_position);
+  switch (mode) {
+    case kSamplingMode_Default: {
+      uint ray_idx = 0;
+      for (float y = br.y + pix_h * (1.0f / 2); y < tr.y; y += pix_h) {
+        for (float x = tl.x + pix_w * (1.0f / 2); x < tr.x; x += pix_w) {
+          rays[ray_idx][0].position = glm::vec3(x, y, kZ);
+          rays[ray_idx][0].direction =
+              glm::normalize(rays[ray_idx][0].position - camera_position);
+          ++ray_idx;
         }
-        ++ray_idx;
       }
+
+      break;
+    }
+    case kSamplingMode_Jitter: {
+      std::default_random_engine re(std::random_device{}());
+      std::uniform_real_distribution<float> distrib(0, 1);
+
+      uint ray_idx = 0;
+      for (float y = br.y; y < tr.y; y += pix_h) {
+        for (float x = tl.x; x < tr.x; x += pix_w) {
+          for (int i = 0; i < config.rays_per_pixel; ++i) {
+            float x_offset = pix_w * distrib(re);
+            float y_offset = pix_h * distrib(re);
+            rays[ray_idx][i].position =
+                glm::vec3(x + x_offset, y + y_offset, kZ);
+            rays[ray_idx][i].direction =
+                glm::normalize(rays[ray_idx][i].position - camera_position);
+          }
+          ++ray_idx;
+        }
+      }
+
+      break;
     }
   }
+
   return rays;
 }
 
@@ -583,11 +596,11 @@ int main(int argc, char **argv) {
     }
   }
 
-  Ray **rays = NULL;
+  Ray **rays = 0;
   if (config.rays_per_pixel == 1) {
-    rays = MakeRays(DEFAULT);
+    rays = MakeRays(kSamplingMode_Default, IMG_W, IMG_H, FOV);
   } else if (config.rays_per_pixel > 1) {
-    rays = MakeRays(SUPER_JITTER);
+    rays = MakeRays(kSamplingMode_Jitter, IMG_W, IMG_H, FOV);
   }
 
   for (uint p = 0; p < kImgArea; ++p) {
