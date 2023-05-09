@@ -94,6 +94,7 @@ void DrawScene() {
 Status SaveJpeg() {
   std::printf("Saving JPEG file %s.\n", config.render_filepath);
 
+  stbi_flip_vertically_on_write(1);
   int rc = stbi_write_jpg(config.render_filepath, IMG_W, IMG_H,
                           kRgbChannel__Count, &buffer[0][0][0], 95);
   if (rc == 0) {
