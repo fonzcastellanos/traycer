@@ -42,7 +42,7 @@ const float eps = 0.00000001;
 const glm::vec3 backgroundColor(1, 1, 1);
 
 static Config config;
-static RenderMode render_mode = kRenderMode_Display;
+static RenderTarget render_target = kRenderTarget_Window;
 
 static glm::vec3 camera_position(0, 0, 0);
 
@@ -69,7 +69,7 @@ void PlotPixelJpeg(int x, int y, uchar r, uchar g, uchar b) {
 
 void PlotPixel(int x, int y, uchar r, uchar g, uchar b) {
   PlotPixelDisplay(x, y, r, g, b);
-  if (render_mode == kRenderMode_Jpeg) {
+  if (render_target == kRenderTarget_Jpeg) {
     PlotPixelJpeg(x, y, r, g, b);
   }
 }
@@ -120,7 +120,7 @@ void idle() {
   static int once = 0;
   if (!once) {
     DrawScene();
-    if (render_mode == kRenderMode_Jpeg) {
+    if (render_target == kRenderTarget_Jpeg) {
       Status status = SaveJpeg();
       if (status != kStatus_Ok) {
         std::fprintf(stderr, "Failed to save JPEG file %s.\n",
@@ -538,7 +538,7 @@ int main(int argc, char **argv) {
   }
 
   if (config.render_filepath[0] != '\0') {
-    render_mode = kRenderMode_Jpeg;
+    render_target = kRenderTarget_Jpeg;
   }
 
   uint light_count;

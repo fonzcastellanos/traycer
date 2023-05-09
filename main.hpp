@@ -59,6 +59,10 @@ struct Intersection {
 
 enum SamplingMode { DEFAULT, SUPER_JITTER };
 
-enum RenderMode { kRenderMode_Display, kRenderMode_Jpeg, kRenderMode__Count };
+enum RenderTarget {
+  kRenderTarget_Window,
+  kRenderTarget_Jpeg,
+  kRenderTarget__Count
+};
 
 #endif  // TRAYCER_MAIN_HPP
