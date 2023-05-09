@@ -16,7 +16,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <ctime>
 #include <glm/glm.hpp>
 #include <random>
 #include <vector>
@@ -447,13 +446,14 @@ Ray **MakeRays(SamplingMode mode) {
       }
     }
   } else if (mode == SUPER_JITTER) {
-    std::srand(std::time(NULL));
+    std::default_random_engine re(std::random_device{}());
+    std::uniform_real_distribution<float> distrib(0, 1);
     for (float y = br.y; y < tr.y - pix_h / 2.0; y += pix_h) {
       for (float x = tl.x; x < tr.x - pix_w / 2.0; x += pix_w) {
         for (int r = 0; r < config.rays_per_pixel; ++r) {
-          float xOffset = pix_w * ((float)(std::rand()) / (float)(RAND_MAX));
-          float yOffset = pix_h * ((float)(std::rand()) / (float)(RAND_MAX));
-          rays[ray_idx][r].position = glm::vec3(x + xOffset, y + yOffset, z);
+          float x_offset = pix_w * distrib(re);
+          float y_offset = pix_h * distrib(re);
+          rays[ray_idx][r].position = glm::vec3(x + x_offset, y + y_offset, z);
           rays[ray_idx][r].direction =
               glm::normalize(rays[ray_idx][r].position - camera_position);
         }
