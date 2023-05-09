@@ -486,7 +486,9 @@ void GetReflectedRay(Ray *ray, Intersection *in, Ray *reflected_ray) {
 }
 
 void IntersectSphere(Ray *ray, int s, Intersection *out) {
-  if (ray == NULL || out == NULL) return;
+  if (ray == NULL || out == NULL) {
+    return;
+  }
 
   out->type = SPHERE;
   out->data.sphere.index = s;
@@ -522,7 +524,9 @@ void IntersectSphere(Ray *ray, int s, Intersection *out) {
 }
 
 void IntersectTriangle(Ray *ray, int tri, Intersection *out) {
-  if (ray == NULL || out == NULL) return;
+  if (ray == NULL || out == NULL) {
+    return;
+  }
 
   out->type = TRIANGLE;
   out->data.triangle.index = tri;
@@ -541,12 +545,16 @@ void IntersectTriangle(Ray *ray, int tri, Intersection *out) {
 
   // Check if plane is parallel to ray
   float nDotRay = glm::dot(n, ray->direction);
-  if (glm::abs(nDotRay) < eps) return;
+  if (glm::abs(nDotRay) < eps) {
+    return;
+  }
 
   // Check for intersection behind ray origin
   float d = -glm::dot(n, v[0].position);
   float t = -(glm::dot(n, ray->position) + d) / nDotRay;
-  if (t < eps) return;
+  if (t < eps) {
+    return;
+  }
 
   glm::vec3 p = ray->position + t * ray->direction;
 
@@ -555,21 +563,27 @@ void IntersectTriangle(Ray *ray, int tri, Intersection *out) {
   // Inside-outside test
   glm::vec3 edge0p = p - v[0].position;
   np = glm::cross(edge01, edge0p);
-  if (glm::dot(n, np) < -eps) return;
+  if (glm::dot(n, np) < -eps) {
+    return;
+  }
 
   float gamma = glm::length(np) / twiceTriArea;
 
   glm::vec3 edge12 = v[2].position - v[1].position;
   glm::vec3 edge1p = p - v[1].position;
   np = glm::cross(edge12, edge1p);
-  if (glm::dot(n, np) < -eps) return;
+  if (glm::dot(n, np) < -eps) {
+    return;
+  }
 
   float alpha = glm::length(np) / twiceTriArea;
 
   glm::vec3 edge20 = v[0].position - v[2].position;
   glm::vec3 edge2p = p - v[2].position;
   np = glm::cross(edge20, edge2p);
-  if (glm::dot(n, np) < -eps) return;
+  if (glm::dot(n, np) < -eps) {
+    return;
+  }
 
   float beta = glm::length(np) / twiceTriArea;
 
@@ -589,12 +603,15 @@ void Intersect(Ray *ray, Intersection *prev, Intersection *out) {
   Intersection current;
   // sphere intersections
   for (int s = 0; s < num_spheres; ++s) {
-    if (prev != NULL && prev->type == SPHERE && prev->data.sphere.index == s)
+    if (prev != NULL && prev->type == SPHERE && prev->data.sphere.index == s) {
       continue;
+    }
 
     IntersectSphere(ray, s, &current);
 
-    if (!current.hit || current.t > out->t + eps) continue;
+    if (!current.hit || current.t > out->t + eps) {
+      continue;
+    }
 
     out->type = current.type;
     out->data.sphere.index = current.data.sphere.index;
@@ -605,12 +622,15 @@ void Intersect(Ray *ray, Intersection *prev, Intersection *out) {
   // triangle intersections
   for (int tri = 0; tri < num_triangles; ++tri) {
     if (prev != NULL && prev->type == TRIANGLE &&
-        prev->data.triangle.index == tri)
+        prev->data.triangle.index == tri) {
       continue;
+    }
 
     IntersectTriangle(ray, tri, &current);
 
-    if (!current.hit || current.t > out->t + eps) continue;
+    if (!current.hit || current.t > out->t + eps) {
+      continue;
+    }
 
     out->type = current.type;
     out->data.triangle.index = current.data.triangle.index;
