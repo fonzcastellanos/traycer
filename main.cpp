@@ -48,8 +48,7 @@ const glm::vec3 backgroundColor(1, 1, 1);
 static Config config;
 static RenderMode render_mode = kRenderMode_Display;
 
-// camera position
-glm::vec3 camPos(0, 0, 0);
+static glm::vec3 camera_position(0, 0, 0);
 
 uchar buffer[IMG_H][IMG_W][3];
 
@@ -61,48 +60,45 @@ glm::vec3 ambient_light;
 int num_triangles = 0;
 int num_spheres = 0;
 
-void plot_pixel_display(int x, int y, unsigned char r, unsigned char g,
-                        unsigned char b) {
-  glColor3f(((float)r) / 255.0f, ((float)g) / 255.0f, ((float)b) / 255.0f);
+void PlotPixelDisplay(int x, int y, uchar r, uchar g, uchar b) {
+  glColor3f(r * (1.0f / 255), g * (1.0f / 255), b * (1.0f / 255));
   glVertex2i(x, y);
 }
 
-void plot_pixel_jpeg(int x, int y, unsigned char r, unsigned char g,
-                     unsigned char b) {
+void PlotPixelJpeg(int x, int y, uchar r, uchar g, uchar b) {
   buffer[y][x][0] = r;
   buffer[y][x][1] = g;
   buffer[y][x][2] = b;
 }
 
-void plot_pixel(int x, int y, unsigned char r, unsigned char g,
-                unsigned char b) {
-  plot_pixel_display(x, y, r, g, b);
+void PlotPixel(int x, int y, uchar r, uchar g, uchar b) {
+  PlotPixelDisplay(x, y, r, g, b);
   if (render_mode == kRenderMode_Jpeg) {
-    plot_pixel_jpeg(x, y, r, g, b);
+    PlotPixelJpeg(x, y, r, g, b);
   }
 }
 
-void draw_scene() {
-  for (unsigned int x = 0; x < IMG_W; x++) {
-    glPointSize(2.0);
+void DrawScene() {
+  for (uint x = 0; x < IMG_W; ++x) {
+    glPointSize(2);
     glBegin(GL_POINTS);
-    for (unsigned int y = 0; y < IMG_H; y++) {
-      plot_pixel(x, y, buffer[y][x][0], buffer[y][x][1], buffer[y][x][2]);
+    for (uint y = 0; y < IMG_H; ++y) {
+      PlotPixel(x, y, buffer[y][x][0], buffer[y][x][1], buffer[y][x][2]);
     }
     glEnd();
     glFlush();
   }
-  printf("Done!\n");
+  std::printf("Done!\n");
   fflush(stdout);
 }
 
-Status save_jpg() {
-  printf("Saving JPEG file: %s\n", config.render_filepath);
+Status SaveJpeg() {
+  std::printf("Saving JPEG file %s.\n", config.render_filepath);
 
   int rc = stbi_write_jpg(config.render_filepath, IMG_W, IMG_H,
                           kRgbChannel__Count, &buffer[0][0][0], 95);
   if (rc == 0) {
-    std::fprintf(stderr, "Could not write data to JPEG file %s\n",
+    std::fprintf(stderr, "Could not write data to JPEG file %s.\n",
                  config.render_filepath);
     return kStatus_IoError;
   }
@@ -110,7 +106,7 @@ Status save_jpg() {
   return kStatus_Ok;
 }
 
-Status ParseField(FILE *f, const char *name, glm::vec3 *vals) {
+Status ParseField(std::FILE *f, const char *name, glm::vec3 *vals) {
   assert(f);
   assert(name);
   assert(vals);
@@ -388,9 +384,9 @@ Status LoadScene(const char *filepath, uint *light_count) {
   return kStatus_Ok;
 }
 
-void display() {}
+void Display() {}
 
-void init() {
+void Init() {
   glMatrixMode(GL_PROJECTION);
   glOrtho(0, IMG_W, 0, IMG_H, 1, -1);
   glMatrixMode(GL_MODELVIEW);
@@ -404,9 +400,9 @@ void idle() {
   // hack to make it only draw once
   static int once = 0;
   if (!once) {
-    draw_scene();
+    DrawScene();
     if (render_mode == kRenderMode_Jpeg) {
-      Status status = save_jpg();
+      Status status = SaveJpeg();
       if (status != kStatus_Ok) {
         std::fprintf(stderr, "Failed to save JPEG file %s.\n",
                      config.render_filepath);
@@ -421,58 +417,54 @@ void idle() {
   once = 1;
 }
 
-Ray **makeRays(SamplingMode mode) {
+Ray **MakeRays(SamplingMode mode) {
   // Generate image plane corners
-  const float z = -1.0;
-  float tanHalfFOV = glm::tan((fov / 2.0) * (M_PI / 180.0));
-  glm::vec3 topRight(kAspectRatio * tanHalfFOV, tanHalfFOV, z);
-  glm::vec3 topLeft(-kAspectRatio * tanHalfFOV, tanHalfFOV, z);
-  glm::vec3 bottomRight(kAspectRatio * tanHalfFOV, -tanHalfFOV, z);
-  glm::vec3 bottomLeft(-kAspectRatio * tanHalfFOV, -tanHalfFOV, z);
+  constexpr float z = -1;
+  float tan_half_fov = glm::tan(((float)fov / 2) * ((float)M_PI / 180));
+  glm::vec3 tr(kAspectRatio * tan_half_fov, tan_half_fov, z);
+  glm::vec3 tl(-kAspectRatio * tan_half_fov, tan_half_fov, z);
+  glm::vec3 br(kAspectRatio * tan_half_fov, -tan_half_fov, z);
+  glm::vec3 bl(-kAspectRatio * tan_half_fov, -tan_half_fov, z);
 
-  // Allocate ray array
   Ray **rays = new Ray *[kImgArea];
   for (uint i = 0; i < kImgArea; ++i) {
     rays[i] = new Ray[config.rays_per_pixel];
   }
 
-  // Calculate pixel dimensions
-  float pWidth = (topRight.x - topLeft.x) / IMG_W;
-  float pHeight = (topRight.y - bottomRight.y) / IMG_H;
+  float pix_w = (tr.x - tl.x) / IMG_W;
+  float pix_h = (tr.y - br.y) / IMG_H;
 
   // Sample
-  int rayInd = 0;
+  int ray_idx = 0;
   if (mode == DEFAULT) {
-    for (float y = bottomRight.y; y < topRight.y - pHeight / 2.0;
-         y += pHeight) {
-      for (float x = topLeft.x; x < topRight.x - pWidth / 2.0; x += pWidth) {
-        rays[rayInd][0].position =
-            glm::vec3(x + pWidth / 2.0, y + pHeight / 2.0, z);
-        rays[rayInd][0].direction =
-            glm::normalize(rays[rayInd][0].position - camPos);
-        ++rayInd;
+    for (float y = br.y; y < tr.y - pix_h / 2.0; y += pix_h) {
+      for (float x = tl.x; x < tr.x - pix_w / 2.0; x += pix_w) {
+        rays[ray_idx][0].position =
+            glm::vec3(x + pix_w / 2.0, y + pix_h / 2.0, z);
+        rays[ray_idx][0].direction =
+            glm::normalize(rays[ray_idx][0].position - camera_position);
+        ++ray_idx;
       }
     }
   } else if (mode == SUPER_JITTER) {
     std::srand(std::time(NULL));
-    for (float y = bottomRight.y; y < topRight.y - pHeight / 2.0;
-         y += pHeight) {
-      for (float x = topLeft.x; x < topRight.x - pWidth / 2.0; x += pWidth) {
+    for (float y = br.y; y < tr.y - pix_h / 2.0; y += pix_h) {
+      for (float x = tl.x; x < tr.x - pix_w / 2.0; x += pix_w) {
         for (int r = 0; r < config.rays_per_pixel; ++r) {
-          float xOffset = pWidth * ((float)(std::rand()) / (float)(RAND_MAX));
-          float yOffset = pHeight * ((float)(std::rand()) / (float)(RAND_MAX));
-          rays[rayInd][r].position = glm::vec3(x + xOffset, y + yOffset, z);
-          rays[rayInd][r].direction =
-              glm::normalize(rays[rayInd][r].position - camPos);
+          float xOffset = pix_w * ((float)(std::rand()) / (float)(RAND_MAX));
+          float yOffset = pix_h * ((float)(std::rand()) / (float)(RAND_MAX));
+          rays[ray_idx][r].position = glm::vec3(x + xOffset, y + yOffset, z);
+          rays[ray_idx][r].direction =
+              glm::normalize(rays[ray_idx][r].position - camera_position);
         }
-        ++rayInd;
+        ++ray_idx;
       }
     }
   }
   return rays;
 }
 
-void getReflectedRay(Ray *ray, Intersection *in, Ray *reflectedRay) {
+void GetReflectedRay(Ray *ray, Intersection *in, Ray *reflected_ray) {
   glm::vec3 p = ray->position + in->t * ray->direction;
   glm::vec3 n;
   if (in->type == SPHERE) {
@@ -489,11 +481,11 @@ void getReflectedRay(Ray *ray, Intersection *in, Ray *reflectedRay) {
     n = glm::normalize(n);
   }
   float vn = glm::clamp<float>(glm::dot(-ray->direction, n), 0.0, 1.0);
-  reflectedRay->direction = glm::normalize(2.0f * vn * n + ray->direction);
-  reflectedRay->position = p;
+  reflected_ray->direction = glm::normalize(2.0f * vn * n + ray->direction);
+  reflected_ray->position = p;
 }
 
-void sphereIntersect(Ray *ray, int s, Intersection *out) {
+void IntersectSphere(Ray *ray, int s, Intersection *out) {
   if (ray == NULL || out == NULL) return;
 
   out->type = SPHERE;
@@ -502,10 +494,10 @@ void sphereIntersect(Ray *ray, int s, Intersection *out) {
   out->hit = false;
 
   // Calculate quadratic coefficients
-  glm::vec3 centerToRay = ray->position - spheres[s].position;
-  float b = 2.0 * glm::dot(ray->direction, centerToRay);
-  float c = glm::pow(centerToRay.x, 2) + glm::pow(centerToRay.y, 2) +
-            glm::pow(centerToRay.z, 2) - glm::pow(spheres[s].radius, 2);
+  glm::vec3 center_to_ray = ray->position - spheres[s].position;
+  float b = 2.0 * glm::dot(ray->direction, center_to_ray);
+  float c = glm::pow(center_to_ray.x, 2) + glm::pow(center_to_ray.y, 2) +
+            glm::pow(center_to_ray.z, 2) - glm::pow(spheres[s].radius, 2);
 
   // Calculate discriminant
   float discriminant = glm::pow(b, 2) - 4.0 * c;
@@ -529,7 +521,7 @@ void sphereIntersect(Ray *ray, int s, Intersection *out) {
   }
 }
 
-void triangleIntersect(Ray *ray, int tri, Intersection *out) {
+void IntersectTriangle(Ray *ray, int tri, Intersection *out) {
   if (ray == NULL || out == NULL) return;
 
   out->type = TRIANGLE;
@@ -588,7 +580,7 @@ void triangleIntersect(Ray *ray, int tri, Intersection *out) {
   out->hit = true;
 }
 
-void intersect(Ray *ray, Intersection *prev, Intersection *out) {
+void Intersect(Ray *ray, Intersection *prev, Intersection *out) {
   if (ray == NULL || out == NULL) return;
   out->ray = ray;
   out->t = (float)FLT_MAX;
@@ -600,7 +592,7 @@ void intersect(Ray *ray, Intersection *prev, Intersection *out) {
     if (prev != NULL && prev->type == SPHERE && prev->data.sphere.index == s)
       continue;
 
-    sphereIntersect(ray, s, &current);
+    IntersectSphere(ray, s, &current);
 
     if (!current.hit || current.t > out->t + eps) continue;
 
@@ -616,7 +608,7 @@ void intersect(Ray *ray, Intersection *prev, Intersection *out) {
         prev->data.triangle.index == tri)
       continue;
 
-    triangleIntersect(ray, tri, &current);
+    IntersectTriangle(ray, tri, &current);
 
     if (!current.hit || current.t > out->t + eps) continue;
 
@@ -631,26 +623,26 @@ void intersect(Ray *ray, Intersection *prev, Intersection *out) {
   }
 }
 
-float getPhongColor(float lightColor, float diffuse, float specular, float ln,
+float GetPhongColor(float lightColor, float diffuse, float specular, float ln,
                     float rv, float shininess) {
   return lightColor * (diffuse * ln + specular * glm::pow(rv, shininess));
 }
 
-glm::vec3 shade(Intersection *surface, int bounces, uint light_count,
+glm::vec3 Shade(Intersection *surface, int bounces, uint light_count,
                 const Lights *extra_lights);
 
-glm::vec3 traceRay(Ray *ray, Intersection *prev, int bounces, uint light_count,
+glm::vec3 TraceRay(Ray *ray, Intersection *prev, int bounces, uint light_count,
                    const Lights *extra_lights) {
   Intersection closest;
-  intersect(ray, prev, &closest);
+  Intersect(ray, prev, &closest);
   if (!closest.hit) {
     return backgroundColor;
   } else {
-    return shade(&closest, bounces, light_count, extra_lights);
+    return Shade(&closest, bounces, light_count, extra_lights);
   }
 }
 
-glm::vec3 shade(Intersection *surface, int bounces, uint light_count,
+glm::vec3 Shade(Intersection *surface, int bounces, uint light_count,
                 const Lights *extra_lights) {
   int index;
   glm::vec3 p;  // point of intersection
@@ -706,7 +698,7 @@ glm::vec3 shade(Intersection *surface, int bounces, uint light_count,
     shadow.position = p;
     shadow.direction = glm::normalize(lights[l].position - p);
 
-    intersect(&shadow, surface, &occluder);
+    Intersect(&shadow, surface, &occluder);
 
     toLight = glm::length(lights[l].position - shadow.position);
     if (occluder.hit && occluder.t + eps < toLight) continue;
@@ -717,7 +709,7 @@ glm::vec3 shade(Intersection *surface, int bounces, uint light_count,
                            1.0);
 
     for (int c = 0; c < 3; ++c) {
-      phongColor[c] += getPhongColor(
+      phongColor[c] += GetPhongColor(
           lights[l].color[c] / (config.extra_lights_per_light + 1),
           color_diffuse[c], color_specular[c], ln, rv, shininess);
     }
@@ -728,7 +720,7 @@ glm::vec3 shade(Intersection *surface, int bounces, uint light_count,
       uint k = l * config.extra_lights_per_light + e;
       shadow.direction = glm::normalize(extra_lights->positions[k] - p);
 
-      intersect(&shadow, surface, &occluder);
+      Intersect(&shadow, surface, &occluder);
 
       toLight = glm::length(extra_lights->positions[k] - shadow.position);
       if (occluder.hit && occluder.t + eps < toLight) continue;
@@ -739,7 +731,7 @@ glm::vec3 shade(Intersection *surface, int bounces, uint light_count,
                              0.0, 1.0);
 
       for (int c = 0; c < 3; ++c) {
-        phongColor[c] += getPhongColor(
+        phongColor[c] += GetPhongColor(
             lights[l].color[c] / (config.extra_lights_per_light + 1),
             color_diffuse[c], color_specular[c], ln, rv, shininess);
       }
@@ -749,8 +741,8 @@ glm::vec3 shade(Intersection *surface, int bounces, uint light_count,
   // launch reflected rays
   if (bounces > 0) {
     Ray reflectedRay;
-    getReflectedRay(surface->ray, surface, &reflectedRay);
-    glm::vec3 reflectedColor = traceRay(&reflectedRay, surface, bounces - 1,
+    GetReflectedRay(surface->ray, surface, &reflectedRay);
+    glm::vec3 reflectedColor = TraceRay(&reflectedRay, surface, bounces - 1,
                                         light_count, extra_lights);
     for (int c = 0; c < 3; ++c) {
       phongColor[c] *= (1 - color_specular[c]);
@@ -816,9 +808,9 @@ int main(int argc, char **argv) {
   glutInitWindowSize(IMG_W, IMG_H);
   // TODO: Destroy window upon exiting program.
   glutCreateWindow(kWindowName);
-  glutDisplayFunc(display);
+  glutDisplayFunc(Display);
   glutIdleFunc(idle);
-  init();
+  Init();
 
   Lights extra_lights;
 
@@ -846,9 +838,9 @@ int main(int argc, char **argv) {
 
   Ray **rays = NULL;
   if (config.rays_per_pixel == 1) {
-    rays = makeRays(DEFAULT);
+    rays = MakeRays(DEFAULT);
   } else if (config.rays_per_pixel > 1) {
-    rays = makeRays(SUPER_JITTER);
+    rays = MakeRays(SUPER_JITTER);
   }
 
   for (uint p = 0; p < kImgArea; ++p) {
@@ -856,7 +848,7 @@ int main(int argc, char **argv) {
     uint y = p / IMG_W;
     glm::vec3 totalColor(0, 0, 0);
     for (int r = 0; r < config.rays_per_pixel; ++r) {
-      totalColor += traceRay(&rays[p][r], NULL, config.reflection_bounces,
+      totalColor += TraceRay(&rays[p][r], NULL, config.reflection_bounces,
                              light_count, &extra_lights);
     }
     for (uint c = 0; c < 3; ++c) {
