@@ -15,7 +15,6 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <glm/glm.hpp>
 #include <random>
 #include <vector>
@@ -23,15 +22,13 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "cli.hpp"
 #include "main.hpp"
+#include "scene.hpp"
+#include "status.hpp"
 #include "stb_image_write.h"
 #include "types.hpp"
 
 #define IMG_W 640
 #define IMG_H 480
-
-#define MAX_TRIANGLES 20000
-#define MAX_SPHERES 100
-#define MAX_LIGHTS 100
 
 // camera field of view
 #define fov 60.0
@@ -56,8 +53,8 @@ Sphere spheres[MAX_SPHERES];
 Light lights[MAX_LIGHTS];
 glm::vec3 ambient_light;
 
-int num_triangles = 0;
-int num_spheres = 0;
+int triangle_count = 0;
+int sphere_count = 0;
 
 void PlotPixelDisplay(int x, int y, uchar r, uchar g, uchar b) {
   glColor3f(r * (1.0f / 255), g * (1.0f / 255), b * (1.0f / 255));
@@ -101,284 +98,6 @@ Status SaveJpeg() {
     std::fprintf(stderr, "Could not write data to JPEG file %s.\n",
                  config.render_filepath);
     return kStatus_IoError;
-  }
-
-  return kStatus_Ok;
-}
-
-Status ParseField(std::FILE *f, const char *name, glm::vec3 *vals) {
-  assert(f);
-  assert(name);
-  assert(vals);
-
-  glm::vec3 &v_ = *vals;
-
-  char str[100];
-
-  int rc = std::fscanf(f, "%s", str);
-  if (rc != 1) {
-    std::fprintf(stderr,
-                 "Failed to parse field name. Expected field name \"%s\".\n",
-                 name);
-    return kStatus_IoError;
-  }
-
-  if (std::strcmp(name, str) != 0) {
-    std::fprintf(stderr,
-                 "Received field name \"%s\". Expected field name \"%s\".\n",
-                 str, name);
-    // TODO: Choose a better-suited status.
-    return kStatus_UnspecifiedError;
-  };
-
-  rc = std::fscanf(f, "%f %f %f", &v_[0], &v_[1], &v_[2]);
-  if (rc != 3) {
-    std::fprintf(stderr, "Failed to parse values of field \"%s\".\n", name);
-    return kStatus_IoError;
-  }
-
-  std::printf("%s %f %f %f\n", name, v_[0], v_[1], v_[2]);
-
-  return kStatus_Ok;
-}
-
-Status ParseField(std::FILE *f, const char *name, float *val) {
-  assert(f);
-  assert(name);
-  assert(val);
-
-  char str[100];
-
-  int rc = std::fscanf(f, "%s", str);
-  if (rc != 1) {
-    std::fprintf(stderr,
-                 "Failed to parse field name. Expected field name \"%s\".\n",
-                 name);
-    return kStatus_IoError;
-  }
-
-  if (std::strcmp(name, str) != 0) {
-    std::fprintf(stderr,
-                 "Received field name \"%s\". Expected field name \"%s\".\n",
-                 str, name);
-    // TODO: Choose a better-suited status.
-    return kStatus_UnspecifiedError;
-  };
-
-  rc = std::fscanf(f, "%f", val);
-  if (rc != 1) {
-    std::fprintf(stderr, "Failed to parse value of field \"%s\".\n", name);
-    return kStatus_IoError;
-  }
-
-  std::printf("%s: %f\n", name, *val);
-
-  return kStatus_Ok;
-}
-
-Status ParseVertex(std::FILE *f, Vertex *v) {
-  assert(f);
-  assert(v);
-
-  Status st = ParseField(f, "pos:", &v->position);
-  if (st != kStatus_Ok) {
-    std::fprintf(stderr, "Failed to parse field.\n");
-    return st;
-  }
-  st = ParseField(f, "nor:", &v->normal);
-  if (st != kStatus_Ok) {
-    std::fprintf(stderr, "Failed to parse field.\n");
-    return st;
-  }
-  st = ParseField(f, "dif:", &v->color_diffuse);
-  if (st != kStatus_Ok) {
-    std::fprintf(stderr, "Failed to parse field.\n");
-    return st;
-  }
-  st = ParseField(f, "spe:", &v->color_specular);
-  if (st != kStatus_Ok) {
-    std::fprintf(stderr, "Failed to parse field.\n");
-    return st;
-  }
-
-  st = ParseField(f, "shi:", &v->shininess);
-  if (st != kStatus_Ok) {
-    std::fprintf(stderr, "Failed to parse field.\n");
-    return st;
-  }
-
-  return kStatus_Ok;
-}
-
-Status ParseTriangle(std::FILE *f, Triangle *t) {
-  assert(f);
-  assert(t);
-
-  for (uint i = 0; i < 3; ++i) {
-    Status st = ParseVertex(f, &t->v[i]);
-    if (st != kStatus_Ok) {
-      std::fprintf(stderr, "Failed to parse vertex.\n");
-      return st;
-    }
-  }
-
-  return kStatus_Ok;
-}
-
-Status ParseSphere(std::FILE *f, Sphere *s) {
-  assert(f);
-  assert(s);
-
-  Status st = ParseField(f, "pos:", &s->position);
-  if (st != kStatus_Ok) {
-    std::fprintf(stderr, "Failed to parse field.\n");
-    return st;
-  }
-
-  st = ParseField(f, "rad:", &s->radius);
-  if (st != kStatus_Ok) {
-    std::fprintf(stderr, "Failed to parse field.\n");
-    return st;
-  }
-
-  st = ParseField(f, "dif:", &s->color_diffuse);
-  if (st != kStatus_Ok) {
-    std::fprintf(stderr, "Failed to parse field.\n");
-    return st;
-  }
-
-  st = ParseField(f, "spe:", &s->color_specular);
-  if (st != kStatus_Ok) {
-    std::fprintf(stderr, "Failed to parse field.\n");
-    return st;
-  }
-
-  st = ParseField(f, "shi:", &s->shininess);
-  if (st != kStatus_Ok) {
-    std::fprintf(stderr, "Failed to parse field.\n");
-    return st;
-  }
-
-  return kStatus_Ok;
-}
-
-Status ParseLight(std::FILE *f, Light *l) {
-  assert(f);
-  assert(l);
-
-  Status st = ParseField(f, "pos:", &l->position);
-  if (st != kStatus_Ok) {
-    std::fprintf(stderr, "Failed to parse field.\n");
-    return st;
-  }
-
-  st = ParseField(f, "col:", &l->color);
-  if (st != kStatus_Ok) {
-    std::fprintf(stderr, "Failed to parse field.\n");
-    return st;
-  }
-
-  return kStatus_Ok;
-}
-
-Status LoadScene(const char *filepath, uint *light_count) {
-  assert(filepath);
-  assert(light_count);
-
-  std::FILE *file = std::fopen(filepath, "r");
-  if (!file) {
-    std::fprintf(stderr, "Failed to open file %s.\n", filepath);
-    return kStatus_IoError;
-  }
-
-  uint obj_count;
-  char type[50];
-  Triangle t;
-  Sphere s;
-  Light l;
-
-  int rc = std::fscanf(file, "%u", &obj_count);
-  if (rc != 1) {
-    std::fprintf(stderr, "Failed to parse object count from file %s.\n",
-                 filepath);
-    return kStatus_IoError;
-  }
-
-  std::printf("Object count: %u\n", obj_count);
-
-  Status st = ParseField(file, "amb:", &ambient_light);
-  if (st != kStatus_Ok) {
-    std::fprintf(stderr, "Failed to parse field of floats.\n");
-    return kStatus_IoError;
-  }
-
-  for (uint i = 0; i < obj_count; ++i) {
-    int rc = std::fscanf(file, "%s\n", type);
-    if (rc != 1) {
-      std::fprintf(stderr, "Failed to read object type.\n");
-      return kStatus_IoError;
-    }
-
-    std::printf("Object type: %s\n", type);
-
-    if (std::strcmp(type, "triangle") == 0) {
-      st = ParseTriangle(file, &t);
-      if (st != kStatus_Ok) {
-        std::fprintf(stderr, "Failed to parse triangle.\n");
-        return st;
-      }
-
-      if (num_triangles == MAX_TRIANGLES) {
-        std::fprintf(stderr,
-                     "Too many triangles. Increase MAX_TRIANGLES if more "
-                     "triangles are desired.\n");
-        // TODO: Choose a better-suited status.
-        return kStatus_UnspecifiedError;
-      }
-
-      triangles[num_triangles] = t;
-      ++num_triangles;
-    } else if (std::strcmp(type, "sphere") == 0) {
-      st = ParseSphere(file, &s);
-      if (st != kStatus_Ok) {
-        std::fprintf(stderr, "Failed to parse sphere.\n");
-        return st;
-      }
-
-      if (num_spheres == MAX_SPHERES) {
-        std::fprintf(stderr,
-                     "Too many spheres. Increase MAX_SPHERES if more spheres "
-                     "are desired.\n");
-        // TODO: Choose a better-suited status.
-        return kStatus_UnspecifiedError;
-      }
-
-      spheres[num_spheres] = s;
-      ++num_spheres;
-    } else if (std::strcmp(type, "light") == 0) {
-      st = ParseLight(file, &l);
-      if (st != kStatus_Ok) {
-        std::fprintf(stderr, "Failed to parse light.\n");
-        return st;
-      }
-
-      if (*light_count == MAX_LIGHTS) {
-        std::fprintf(stderr,
-                     "Too many lights. Increase MAX_LIGHTS if more lights are "
-                     "desired.\n");
-        // TODO: Choose a better-suited status.
-        return kStatus_UnspecifiedError;
-      }
-
-      lights[*light_count] = l;
-      ++(*light_count);
-    } else {
-      std::fprintf(stderr, "Invalid object type \"%s\" in scene file %s\n",
-                   type, filepath);
-
-      // TODO: Choose a better-suited status.
-      return kStatus_UnspecifiedError;
-    }
   }
 
   return kStatus_Ok;
@@ -605,7 +324,7 @@ void Intersect(Ray *ray, Intersection *prev, Intersection *out) {
 
   Intersection current;
   // sphere intersections
-  for (int s = 0; s < num_spheres; ++s) {
+  for (int s = 0; s < sphere_count; ++s) {
     if (prev != NULL && prev->type == SPHERE && prev->data.sphere.index == s) {
       continue;
     }
@@ -623,7 +342,7 @@ void Intersect(Ray *ray, Intersection *prev, Intersection *out) {
     out->hit = current.hit;
   }
   // triangle intersections
-  for (int tri = 0; tri < num_triangles; ++tri) {
+  for (int tri = 0; tri < triangle_count; ++tri) {
     if (prev != NULL && prev->type == TRIANGLE &&
         prev->data.triangle.index == tri) {
       continue;
@@ -824,7 +543,8 @@ int main(int argc, char **argv) {
 
   uint light_count;
 
-  st = LoadScene(config.scene_filepath, &light_count);
+  st = LoadScene(config.scene_filepath, &ambient_light, triangles,
+                 &triangle_count, spheres, &sphere_count, lights, &light_count);
   if (st != kStatus_Ok) {
     std::fprintf(stderr, "Failed to load scene.\n");
     return EXIT_FAILURE;

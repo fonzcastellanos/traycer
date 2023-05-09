@@ -14,8 +14,12 @@ add_subdirectory(vendor/glm)
 
 add_library(cli cli.cpp)
 
+add_library(scene scene.cpp)
+target_link_libraries(scene PUBLIC glm)
+target_include_directories(scene PUBLIC vendor)
+
 add_executable(traycer main.cpp)
-target_link_libraries(traycer PRIVATE glm cli)
+target_link_libraries(traycer PRIVATE glm cli scene)
 target_include_directories(traycer PRIVATE vendor)
 
 if(LINUX)

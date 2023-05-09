@@ -6,13 +6,6 @@
 
 #define FILEPATH_BUFFER_SIZE 4096
 
-enum Status {
-  kStatus_Ok,
-  kStatus_UnspecifiedError,
-  kStatus_IoError,
-  kStatus_GlError
-};
-
 struct Config {
   char *scene_filepath;
   int rays_per_pixel;
@@ -26,31 +19,6 @@ enum RgbChannel {
   kRgbChannel_Green,
   kRgbChannel_Blue,
   kRgbChannel__Count
-};
-
-struct Vertex {
-  glm::vec3 position;
-  glm::vec3 color_diffuse;
-  glm::vec3 color_specular;
-  glm::vec3 normal;
-  float shininess;
-};
-
-struct Triangle {
-  Vertex v[3];
-};
-
-struct Sphere {
-  glm::vec3 position;
-  glm::vec3 color_diffuse;
-  glm::vec3 color_specular;
-  float shininess;
-  float radius;
-};
-
-struct Light {
-  glm::vec3 position;
-  glm::vec3 color;
 };
 
 struct Lights {
