@@ -596,7 +596,9 @@ void IntersectTriangle(Ray *ray, int tri, Intersection *out) {
 }
 
 void Intersect(Ray *ray, Intersection *prev, Intersection *out) {
-  if (ray == NULL || out == NULL) return;
+  if (ray == NULL || out == NULL) {
+    return;
+  }
   out->ray = ray;
   out->t = (float)FLT_MAX;
   out->hit = false;
@@ -722,7 +724,9 @@ glm::vec3 Shade(Intersection *surface, int bounces, uint light_count,
     Intersect(&shadow, surface, &occluder);
 
     toLight = glm::length(lights[l].position - shadow.position);
-    if (occluder.hit && occluder.t + eps < toLight) continue;
+    if (occluder.hit && occluder.t + eps < toLight) {
+      continue;
+    }
 
     ln = glm::clamp<float>(glm::dot(shadow.direction, n), 0.0, 1.0);
     reflection = glm::normalize(2.0f * ln * n - shadow.direction);
@@ -744,7 +748,9 @@ glm::vec3 Shade(Intersection *surface, int bounces, uint light_count,
       Intersect(&shadow, surface, &occluder);
 
       toLight = glm::length(extra_lights->positions[k] - shadow.position);
-      if (occluder.hit && occluder.t + eps < toLight) continue;
+      if (occluder.hit && occluder.t + eps < toLight) {
+        continue;
+      }
 
       ln = glm::clamp<float>(glm::dot(shadow.direction, n), 0.0, 1.0);
       reflection = glm::normalize(2.0f * ln * n - shadow.direction);
