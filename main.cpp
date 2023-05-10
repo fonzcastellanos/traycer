@@ -176,8 +176,8 @@ Ray **MakeRays(SamplingMode mode, uint w, uint h, float fov) {
       std::uniform_real_distribution<float> distrib(0, 1);
 
       uint ray_idx = 0;
-      for (float y = br.y; y < tr.y; y += pix_h) {
-        for (float x = tl.x; x < tr.x; x += pix_w) {
+      for (float y = br.y; y < tr.y - pix_h * (1.0f / 2); y += pix_h) {
+        for (float x = tl.x; x < tr.x - pix_w * (1.0f / 2); x += pix_w) {
           for (int i = 0; i < config.rays_per_pixel; ++i) {
             float x_offset = pix_w * distrib(re);
             float y_offset = pix_h * distrib(re);
