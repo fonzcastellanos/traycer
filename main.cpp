@@ -32,6 +32,7 @@
 #define IMG_W 640
 #define IMG_H 480
 
+#define FOCAL_LEN 1
 #define FOV 60
 
 const char *kWindowName = "traycer";
@@ -45,7 +46,7 @@ const glm::vec3 backgroundColor(1, 1, 1);
 static Config config;
 static RenderTarget render_target = kRenderTarget_Window;
 
-static glm::vec3 camera_position(0, 0, 0);
+const glm::vec3 camera_position(0, 0, 0);
 
 uchar buffer[IMG_H][IMG_W][3];
 
@@ -137,15 +138,17 @@ void idle() {
   once = 1;
 }
 
-Ray **MakeRays(SamplingMode mode, uint w, uint h, float fov) {
-  // Calculate image plane corners.
-  constexpr float kZ = -1;
+Ray **MakeRays(SamplingMode mode, uint w, uint h, float fov, float focal_len) {
+  // Calculate projection plane corners.
+  float proj_plane_z = -focal_len;
   float aspect = (float)w / h;
   float tan_half_fov = glm::tan((fov / 2) * ((float)PI / 180));
-  glm::vec3 tr(aspect * tan_half_fov, tan_half_fov, kZ);
-  glm::vec3 tl(-aspect * tan_half_fov, tan_half_fov, kZ);
-  glm::vec3 br(aspect * tan_half_fov, -tan_half_fov, kZ);
-  glm::vec3 bl(-aspect * tan_half_fov, -tan_half_fov, kZ);
+  glm::vec3 tr(aspect * tan_half_fov, tan_half_fov, proj_plane_z);
+  glm::vec3 tl(-aspect * tan_half_fov, tan_half_fov, proj_plane_z);
+  glm::vec3 br(aspect * tan_half_fov, -tan_half_fov, proj_plane_z);
+  glm::vec3 bl(-aspect * tan_half_fov, -tan_half_fov, proj_plane_z);
+
+  constexpr float kTolerance = 0.00001;
 
   uint pixel_count = w * h;
 
@@ -162,7 +165,7 @@ Ray **MakeRays(SamplingMode mode, uint w, uint h, float fov) {
       uint ray_idx = 0;
       for (float y = br.y + pix_h * (1.0f / 2); y < tr.y; y += pix_h) {
         for (float x = tl.x + pix_w * (1.0f / 2); x < tr.x; x += pix_w) {
-          rays[ray_idx][0].position = glm::vec3(x, y, kZ);
+          rays[ray_idx][0].position = glm::vec3(x, y, proj_plane_z);
           rays[ray_idx][0].direction =
               glm::normalize(rays[ray_idx][0].position - camera_position);
           ++ray_idx;
@@ -176,13 +179,13 @@ Ray **MakeRays(SamplingMode mode, uint w, uint h, float fov) {
       std::uniform_real_distribution<float> distrib(0, 1);
 
       uint ray_idx = 0;
-      for (float y = br.y; y < tr.y - pix_h * (1.0f / 2); y += pix_h) {
-        for (float x = tl.x; x < tr.x - pix_w * (1.0f / 2); x += pix_w) {
+      for (float y = br.y; y < tr.y - kTolerance; y += pix_h) {
+        for (float x = tl.x; x < tr.x - kTolerance; x += pix_w) {
           for (int i = 0; i < config.rays_per_pixel; ++i) {
             float x_offset = pix_w * distrib(re);
             float y_offset = pix_h * distrib(re);
             rays[ray_idx][i].position =
-                glm::vec3(x + x_offset, y + y_offset, kZ);
+                glm::vec3(x + x_offset, y + y_offset, proj_plane_z);
             rays[ray_idx][i].direction =
                 glm::normalize(rays[ray_idx][i].position - camera_position);
           }
@@ -598,9 +601,9 @@ int main(int argc, char **argv) {
 
   Ray **rays = 0;
   if (config.rays_per_pixel == 1) {
-    rays = MakeRays(kSamplingMode_Default, IMG_W, IMG_H, FOV);
+    rays = MakeRays(kSamplingMode_Default, IMG_W, IMG_H, FOV, FOCAL_LEN);
   } else if (config.rays_per_pixel > 1) {
-    rays = MakeRays(kSamplingMode_Jitter, IMG_W, IMG_H, FOV);
+    rays = MakeRays(kSamplingMode_Jitter, IMG_W, IMG_H, FOV, FOCAL_LEN);
   }
 
   for (uint p = 0; p < kImgArea; ++p) {
