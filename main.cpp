@@ -131,6 +131,27 @@ void Idle() {
   once = 1;
 }
 
+static void ProjPlaneCorners(uint w, uint h, float fov, float z, glm::vec3 *tr,
+                             glm::vec3 *tl, glm::vec3 *br, glm::vec3 *bl) {
+  constexpr float kTolerance = 0.00001;
+
+  assert(tr);
+  assert(tl);
+  assert(br);
+  assert(bl);
+
+  assert(fov > kTolerance);
+  assert(focal_len > kTolerance);
+
+  float aspect = (float)w / h;
+  float tan_half_fov = glm::tan(fov * (1.0f / 2) * (float)PI * (1.0f / 180));
+
+  *tr = glm::vec3(aspect * tan_half_fov, tan_half_fov, z);
+  *tl = glm::vec3(-aspect * tan_half_fov, tan_half_fov, z);
+  *br = glm::vec3(aspect * tan_half_fov, -tan_half_fov, z);
+  *bl = glm::vec3(-aspect * tan_half_fov, -tan_half_fov, z);
+}
+
 static void MakeRays(SamplingMode mode, const glm::vec3 *camera_pos, uint w,
                      uint h, float fov, float focal_len,
                      std::vector<Ray> *rays) {
@@ -141,14 +162,12 @@ static void MakeRays(SamplingMode mode, const glm::vec3 *camera_pos, uint w,
   assert(focal_len > kTolerance);
   assert(rays);
 
-  // Calculate projection plane corners.
   float proj_plane_z = -focal_len;
-  float aspect = (float)w / h;
-  float tan_half_fov = glm::tan((fov / 2) * ((float)PI / 180));
-  glm::vec3 tr(aspect * tan_half_fov, tan_half_fov, proj_plane_z);
-  glm::vec3 tl(-aspect * tan_half_fov, tan_half_fov, proj_plane_z);
-  glm::vec3 br(aspect * tan_half_fov, -tan_half_fov, proj_plane_z);
-  glm::vec3 bl(-aspect * tan_half_fov, -tan_half_fov, proj_plane_z);
+  glm::vec3 tr;
+  glm::vec3 tl;
+  glm::vec3 br;
+  glm::vec3 bl;
+  ProjPlaneCorners(w, h, fov, proj_plane_z, &tr, &tl, &br, &bl);
 
   uint pixel_count = w * h;
 
