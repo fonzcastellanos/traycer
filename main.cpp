@@ -220,33 +220,35 @@ void GetReflectedRay(Ray *ray, Intersection *in, Ray *reflected_ray) {
   reflected_ray->position = p;
 }
 
-void IntersectSphere(Ray *ray, int s, Intersection *out) {
-  if (ray == NULL || out == NULL) {
-    return;
-  }
+void IntersectSphere(Ray *ray, Sphere *spheres, uint sphere_idx,
+                     Intersection *out) {
+  assert(ray);
+  assert(spheres);
+  assert(out);
 
   out->type = kGeometryType_Sphere;
-  out->sphere_data.index = s;
+  out->sphere_data.index = sphere_idx;
   out->ray = ray;
   out->hit = false;
 
   // Calculate quadratic coefficients
-  glm::vec3 center_to_ray = ray->position - spheres[s].position;
-  float b = 2.0 * glm::dot(ray->direction, center_to_ray);
+  glm::vec3 center_to_ray = ray->position - spheres[sphere_idx].position;
+  float b = 2 * glm::dot(ray->direction, center_to_ray);
   float c = glm::pow(center_to_ray.x, 2) + glm::pow(center_to_ray.y, 2) +
-            glm::pow(center_to_ray.z, 2) - glm::pow(spheres[s].radius, 2);
+            glm::pow(center_to_ray.z, 2) -
+            glm::pow(spheres[sphere_idx].radius, 2);
 
   // Calculate discriminant
-  float discriminant = glm::pow(b, 2) - 4.0 * c;
+  float discriminant = glm::pow(b, 2) - 4 * c;
 
   // Calculate roots and determine t
   float t;
   if (discriminant < -eps) {  // misses sphere
     return;
   } else if (glm::abs(discriminant) < eps) {  // hits sphere at one point
-    t = -b / 2.0;
+    t = -b * (1.0f / 2);
   } else {  // hits sphere at two points
-    float q = -0.5 * (b + glm::sign(b) * glm::sqrt(discriminant));
+    float q = (-1.0f / 2) * (b + glm::sign(b) * glm::sqrt(discriminant));
     float root1 = c / q;
     float root2 = q;
     t = glm::min(root1, root2);
@@ -258,18 +260,18 @@ void IntersectSphere(Ray *ray, int s, Intersection *out) {
   }
 }
 
-void IntersectTriangle(Ray *ray, int tri, Intersection *out) {
-  if (ray == NULL || out == NULL) {
-    return;
-  }
+void IntersectTriangle(Ray *ray, Triangle *triangles, int triangle_idx,
+                       Intersection *out) {
+  assert(ray);
+  assert(out);
 
   out->type = kGeometryType_Triangle;
-  out->triangle_data.index = tri;
+  out->triangle_data.index = triangle_idx;
   out->ray = ray;
   out->hit = false;
 
   // Alias for vertices
-  Vertex(&v)[3] = triangles[tri].v;
+  Vertex(&v)[3] = triangles[triangle_idx].v;
 
   // Calculate triangle normal
   glm::vec3 edge01 = v[1].position - v[0].position;
@@ -329,9 +331,14 @@ void IntersectTriangle(Ray *ray, int tri, Intersection *out) {
   out->hit = true;
 }
 
-void Intersect(Ray *ray, Intersection *prev, Intersection *out) {
+void Intersect(Ray *ray, Sphere *spheres, uint sphere_count,
+               Triangle *triangles, uint triangle_count, Intersection *prev,
+               Intersection *out) {
   assert(ray);
+  assert(spheres);
+  assert(triangles);
   assert(prev);
+  assert(out);
 
   out->ray = ray;
   out->t = std::numeric_limits<float>::max();
@@ -339,13 +346,13 @@ void Intersect(Ray *ray, Intersection *prev, Intersection *out) {
 
   Intersection current;
   // sphere intersections
-  for (int s = 0; s < sphere_count; ++s) {
+  for (uint i = 0; i < sphere_count; ++i) {
     if (prev != NULL && prev->type == kGeometryType_Sphere &&
-        prev->sphere_data.index == s) {
+        prev->sphere_data.index == i) {
       continue;
     }
 
-    IntersectSphere(ray, s, &current);
+    IntersectSphere(ray, spheres, i, &current);
 
     if (!current.hit || current.t > out->t + eps) {
       continue;
@@ -358,13 +365,13 @@ void Intersect(Ray *ray, Intersection *prev, Intersection *out) {
     out->hit = current.hit;
   }
   // triangle intersections
-  for (int tri = 0; tri < triangle_count; ++tri) {
+  for (uint i = 0; i < triangle_count; ++i) {
     if (prev != NULL && prev->type == kGeometryType_Triangle &&
-        prev->triangle_data.index == tri) {
+        prev->triangle_data.index == i) {
       continue;
     }
 
-    IntersectTriangle(ray, tri, &current);
+    IntersectTriangle(ray, triangles, i, &current);
 
     if (!current.hit || current.t > out->t + eps) {
       continue;
@@ -386,22 +393,27 @@ float GetPhongColor(float lightColor, float diffuse, float specular, float ln,
   return lightColor * (diffuse * ln + specular * glm::pow(rv, shininess));
 }
 
-glm::vec3 Shade(Intersection *surface, int bounces, uint light_count,
-                const Lights *extra_lights);
+glm::vec3 Shade(Intersection *surface, Sphere *spheres, uint sphere_count,
+                Triangle *triangles, uint triangle_count, int bounces,
+                uint light_count, const Lights *extra_lights);
 
-glm::vec3 TraceRay(Ray *ray, Intersection *prev, int bounces, uint light_count,
-                   const Lights *extra_lights) {
+glm::vec3 TraceRay(Ray *ray, Sphere *spheres, uint sphere_count,
+                   Triangle *triangles, uint triangle_count, Intersection *prev,
+                   int bounces, uint light_count, const Lights *extra_lights) {
   Intersection closest;
-  Intersect(ray, prev, &closest);
+  Intersect(ray, spheres, sphere_count, triangles, triangle_count, prev,
+            &closest);
   if (!closest.hit) {
     return backgroundColor;
   } else {
-    return Shade(&closest, bounces, light_count, extra_lights);
+    return Shade(&closest, spheres, sphere_count, triangles, triangle_count,
+                 bounces, light_count, extra_lights);
   }
 }
 
-glm::vec3 Shade(Intersection *surface, int bounces, uint light_count,
-                const Lights *extra_lights) {
+glm::vec3 Shade(Intersection *surface, Sphere *spheres, uint sphere_count,
+                Triangle *triangles, uint triangle_count, int bounces,
+                uint light_count, const Lights *extra_lights) {
   int index;
   glm::vec3 p;  // point of intersection
   glm::vec3 n;  // normal;
@@ -456,7 +468,8 @@ glm::vec3 Shade(Intersection *surface, int bounces, uint light_count,
     shadow.position = p;
     shadow.direction = glm::normalize(lights[l].position - p);
 
-    Intersect(&shadow, surface, &occluder);
+    Intersect(&shadow, spheres, sphere_count, triangles, triangle_count,
+              surface, &occluder);
 
     toLight = glm::length(lights[l].position - shadow.position);
     if (occluder.hit && occluder.t + eps < toLight) {
@@ -480,7 +493,8 @@ glm::vec3 Shade(Intersection *surface, int bounces, uint light_count,
       uint k = l * config.extra_lights_per_light + e;
       shadow.direction = glm::normalize(extra_lights->positions[k] - p);
 
-      Intersect(&shadow, surface, &occluder);
+      Intersect(&shadow, spheres, sphere_count, triangles, triangle_count,
+                surface, &occluder);
 
       toLight = glm::length(extra_lights->positions[k] - shadow.position);
       if (occluder.hit && occluder.t + eps < toLight) {
@@ -504,8 +518,9 @@ glm::vec3 Shade(Intersection *surface, int bounces, uint light_count,
   if (bounces > 0) {
     Ray reflectedRay;
     GetReflectedRay(surface->ray, surface, &reflectedRay);
-    glm::vec3 reflectedColor = TraceRay(&reflectedRay, surface, bounces - 1,
-                                        light_count, extra_lights);
+    glm::vec3 reflectedColor = TraceRay(&reflectedRay, spheres, sphere_count,
+                                        triangles, triangle_count, surface,
+                                        bounces - 1, light_count, extra_lights);
     for (int c = 0; c < 3; ++c) {
       phongColor[c] *= (1 - color_specular[c]);
       phongColor[c] += color_specular[c] * reflectedColor[c];
@@ -611,7 +626,8 @@ int main(int argc, char **argv) {
     uint y = i / IMG_W;
     glm::vec3 total_color(0, 0, 0);
     for (int j = 0; j < config.rays_per_pixel; ++j) {
-      total_color += TraceRay(&rays[i][j], NULL, config.reflection_bounces,
+      total_color += TraceRay(&rays[i][j], spheres, sphere_count, triangles,
+                              triangle_count, NULL, config.reflection_bounces,
                               light_count, &extra_lights);
     }
     for (int j = 0; j < kRgbChannel__Count; ++j) {

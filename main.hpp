@@ -34,14 +34,14 @@ struct Ray {
 enum GeometryType { kGeometryType_Sphere, kGeometryType_Triangle };
 
 struct TriangleData {
-  int index;
+  uint index;
   float alpha;
   float beta;
   float gamma;
 };
 
 struct SphereData {
-  int index;
+  uint index;
 };
 
 struct Intersection {
