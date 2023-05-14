@@ -131,10 +131,12 @@ void Idle() {
   once = 1;
 }
 
-static void MakeRays(SamplingMode mode, uint w, uint h, float fov,
-                     float focal_len, std::vector<Ray> *rays) {
+static void MakeRays(SamplingMode mode, const glm::vec3 *camera_pos, uint w,
+                     uint h, float fov, float focal_len,
+                     std::vector<Ray> *rays) {
   constexpr float kTolerance = 0.00001;
 
+  assert(camera_pos);
   assert(fov > kTolerance);
   assert(focal_len > kTolerance);
   assert(rays);
@@ -164,7 +166,7 @@ static void MakeRays(SamplingMode mode, uint w, uint h, float fov,
         for (float x = tl.x + pix_w * (1.0f / 2); x < tr.x; x += pix_w) {
           rays_[ray_idx].position = glm::vec3(x, y, proj_plane_z);
           rays_[ray_idx].direction =
-              glm::normalize(rays_[ray_idx].position - camera_position);
+              glm::normalize(rays_[ray_idx].position - *camera_pos);
           ++ray_idx;
         }
       }
@@ -185,7 +187,7 @@ static void MakeRays(SamplingMode mode, uint w, uint h, float fov,
             rays_[j].position =
                 glm::vec3(x + x_offset, y + y_offset, proj_plane_z);
             rays_[j].direction =
-                glm::normalize(rays_[j].position - camera_position);
+                glm::normalize(rays_[j].position - *camera_pos);
           }
           ++ray_idx;
         }
@@ -632,9 +634,11 @@ int main(int argc, char **argv) {
 
   std::vector<Ray> rays;
   if (config.rays_per_pixel == 1) {
-    MakeRays(kSamplingMode_Default, IMG_W, IMG_H, FOV, FOCAL_LEN, &rays);
+    MakeRays(kSamplingMode_Default, &camera_position, IMG_W, IMG_H, FOV,
+             FOCAL_LEN, &rays);
   } else if (config.rays_per_pixel > 1) {
-    MakeRays(kSamplingMode_Jitter, IMG_W, IMG_H, FOV, FOCAL_LEN, &rays);
+    MakeRays(kSamplingMode_Jitter, &camera_position, IMG_W, IMG_H, FOV,
+             FOCAL_LEN, &rays);
   }
 
   for (uint i = 0; i < kImgArea; ++i) {
