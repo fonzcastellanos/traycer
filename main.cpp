@@ -49,13 +49,8 @@ const glm::vec3 camera_position(0, 0, 0);
 
 uchar buffer[IMG_H][IMG_W][3];
 
-Triangle triangles[MAX_TRIANGLES];
-Sphere spheres[MAX_SPHERES];
 Light lights[MAX_LIGHTS];
 glm::vec3 ambient_light;
-
-int triangle_count = 0;
-int sphere_count = 0;
 
 void PlotPixelDisplay(int x, int y, uchar r, uchar g, uchar b) {
   glColor3f(r * (1.0f / 255), g * (1.0f / 255), b * (1.0f / 255));
@@ -199,7 +194,14 @@ Ray **MakeRays(SamplingMode mode, uint w, uint h, float fov, float focal_len) {
   return rays;
 }
 
-void GetReflectedRay(Ray *ray, Intersection *in, Ray *reflected_ray) {
+void GetReflectedRay(Ray *ray, Sphere *spheres, Triangle *triangles,
+                     Intersection *in, Ray *reflected_ray) {
+  assert(ray);
+  assert(spheres);
+  assert(triangles);
+  assert(in);
+  assert(reflected_ray);
+
   glm::vec3 p = ray->position + in->t * ray->direction;
   glm::vec3 n;
   if (in->type == kGeometryType_Sphere) {
@@ -517,7 +519,7 @@ glm::vec3 Shade(Intersection *surface, Sphere *spheres, uint sphere_count,
   // launch reflected rays
   if (bounces > 0) {
     Ray reflectedRay;
-    GetReflectedRay(surface->ray, surface, &reflectedRay);
+    GetReflectedRay(surface->ray, spheres, triangles, surface, &reflectedRay);
     glm::vec3 reflectedColor = TraceRay(&reflectedRay, spheres, sphere_count,
                                         triangles, triangle_count, surface,
                                         bounces - 1, light_count, extra_lights);
@@ -573,9 +575,11 @@ int main(int argc, char **argv) {
   }
 
   uint light_count;
+  std::vector<Sphere> spheres;
+  std::vector<Triangle> triangles;
 
-  st = LoadScene(config.scene_filepath, &ambient_light, triangles,
-                 &triangle_count, spheres, &sphere_count, lights, &light_count);
+  st = LoadScene(config.scene_filepath, &ambient_light, &triangles, &spheres,
+                 lights, &light_count);
   if (st != kStatus_Ok) {
     std::fprintf(stderr, "Failed to load scene.\n");
     return EXIT_FAILURE;
@@ -626,9 +630,10 @@ int main(int argc, char **argv) {
     uint y = i / IMG_W;
     glm::vec3 total_color(0, 0, 0);
     for (int j = 0; j < config.rays_per_pixel; ++j) {
-      total_color += TraceRay(&rays[i][j], spheres, sphere_count, triangles,
-                              triangle_count, NULL, config.reflection_bounces,
-                              light_count, &extra_lights);
+      total_color +=
+          TraceRay(&rays[i][j], spheres.data(), spheres.size(),
+                   triangles.data(), triangles.size(), NULL,
+                   config.reflection_bounces, light_count, &extra_lights);
     }
     for (int j = 0; j < kRgbChannel__Count; ++j) {
       buffer[y][x][j] =

@@ -180,13 +180,11 @@ Status ParseLight(std::FILE *f, Light *l) {
 }
 
 Status LoadScene(const char *filepath, glm::vec3 *ambient_light,
-                 Triangle *triangles, int *triangle_count, Sphere *spheres,
-                 int *sphere_count, Light *lights, uint *light_count) {
+                 std::vector<Triangle> *triangles, std::vector<Sphere> *spheres,
+                 Light *lights, uint *light_count) {
   assert(filepath);
   assert(triangles);
-  assert(triangle_count);
   assert(spheres);
-  assert(sphere_count);
   assert(lights);
   assert(light_count);
 
@@ -198,8 +196,6 @@ Status LoadScene(const char *filepath, glm::vec3 *ambient_light,
 
   uint obj_count;
   char type[50];
-  Triangle t;
-  Sphere s;
   Light l;
 
   int rc = std::fscanf(file, "%u", &obj_count);
@@ -227,39 +223,23 @@ Status LoadScene(const char *filepath, glm::vec3 *ambient_light,
     std::printf("Object type: %s\n", type);
 
     if (std::strcmp(type, "triangle") == 0) {
+      Triangle t;
       st = ParseTriangle(file, &t);
       if (st != kStatus_Ok) {
         std::fprintf(stderr, "Failed to parse triangle.\n");
         return st;
       }
 
-      if (*triangle_count == MAX_TRIANGLES) {
-        std::fprintf(stderr,
-                     "Too many triangles. Increase MAX_TRIANGLES if more "
-                     "triangles are desired.\n");
-        // TODO: Choose a better-suited status.
-        return kStatus_UnspecifiedError;
-      }
-
-      triangles[*triangle_count] = t;
-      ++(*triangle_count);
+      triangles->push_back(t);
     } else if (std::strcmp(type, "sphere") == 0) {
-      st = ParseSphere(file, &s);
+      Sphere sph;
+      st = ParseSphere(file, &sph);
       if (st != kStatus_Ok) {
         std::fprintf(stderr, "Failed to parse sphere.\n");
         return st;
       }
 
-      if (*sphere_count == MAX_SPHERES) {
-        std::fprintf(stderr,
-                     "Too many spheres. Increase MAX_SPHERES if more spheres "
-                     "are desired.\n");
-        // TODO: Choose a better-suited status.
-        return kStatus_UnspecifiedError;
-      }
-
-      spheres[*sphere_count] = s;
-      ++(*sphere_count);
+      spheres->push_back(sph);
     } else if (std::strcmp(type, "light") == 0) {
       st = ParseLight(file, &l);
       if (st != kStatus_Ok) {

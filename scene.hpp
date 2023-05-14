@@ -2,6 +2,7 @@
 #define TRAYCER_SCENE_HPP
 
 #include <glm/glm/vec3.hpp>
+#include <vector>
 
 #include "status.hpp"
 #include "types.hpp"
@@ -36,7 +37,6 @@ struct Light {
 };
 
 Status LoadScene(const char* filepath, glm::vec3* ambient_light,
-                 Triangle* triangles, int* triangle_count, Sphere* spheres,
-                 int* sphere_count, Light* lights, uint* light_count);
+                 std::vector<Triangle>* triangles, std::vector<Sphere>* spheres, Light* lights, uint* light_count);
 
 #endif  // TRAYCER_SCENE_HPP
