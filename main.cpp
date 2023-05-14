@@ -133,7 +133,9 @@ void Idle() {
 
 static void ProjPlaneCorners(uint w, uint h, float fov, float z, glm::vec3 *tr,
                              glm::vec3 *tl, glm::vec3 *br, glm::vec3 *bl) {
+#ifndef NDEBUG
   constexpr float kTolerance = 0.00001;
+#endif
 
   assert(tr);
   assert(tl);
@@ -141,7 +143,6 @@ static void ProjPlaneCorners(uint w, uint h, float fov, float z, glm::vec3 *tr,
   assert(bl);
 
   assert(fov > kTolerance);
-  assert(focal_len > kTolerance);
 
   float aspect = (float)w / h;
   float tan_half_fov = glm::tan(fov * (1.0f / 2) * (float)PI * (1.0f / 180));
@@ -152,14 +153,16 @@ static void ProjPlaneCorners(uint w, uint h, float fov, float z, glm::vec3 *tr,
   *bl = glm::vec3(-aspect * tan_half_fov, -tan_half_fov, z);
 }
 
-static void MakeRays(SamplingMode mode, const glm::vec3 *camera_pos, uint w,
-                     uint h, float fov, float focal_len,
-                     std::vector<Ray> *rays) {
+static void MakeDefaultRays(const glm::vec3 *camera_pos, uint w, uint h,
+                            float fov, float focal_len,
+                            std::vector<Ray> *rays) {
+#ifndef NDEBUG
   constexpr float kTolerance = 0.00001;
+#endif
 
   assert(camera_pos);
-  assert(fov > kTolerance);
-  assert(focal_len > kTolerance);
+  assert(fov + kTolerance > 0);
+  assert(focal_len + kTolerance > 0);
   assert(rays);
 
   float proj_plane_z = -focal_len;
@@ -173,46 +176,61 @@ static void MakeRays(SamplingMode mode, const glm::vec3 *camera_pos, uint w,
 
   auto &rays_ = *rays;
 
-  rays_.resize(pixel_count * config.rays_per_pixel);
+  rays_.resize(pixel_count);
+
+  float pix_w = (tr.x - tl.x) / w;
+  float pix_h = (tr.y - br.y) / h;
+  uint i = 0;
+  for (float y = br.y + pix_h * (1.0f / 2); y < tr.y; y += pix_h) {
+    for (float x = tl.x + pix_w * (1.0f / 2); x < tr.x; x += pix_w) {
+      rays_[i].position = glm::vec3(x, y, proj_plane_z);
+      rays_[i].direction = glm::normalize(rays_[i].position - *camera_pos);
+      ++i;
+    }
+  }
+}
+
+static void MakeJitteredRays(const glm::vec3 *camera_pos, uint w, uint h,
+                             float fov, float focal_len, uint rays_per_pixel,
+                             std::vector<Ray> *rays) {
+  constexpr float kTolerance = 0.00001;
+
+  assert(camera_pos);
+  assert(fov + kTolerance > 0);
+  assert(focal_len + kTolerance > 0);
+  assert(rays_per_pixel > 0);
+  assert(rays);
+
+  float proj_plane_z = -focal_len;
+  glm::vec3 tr;
+  glm::vec3 tl;
+  glm::vec3 br;
+  glm::vec3 bl;
+  ProjPlaneCorners(w, h, fov, proj_plane_z, &tr, &tl, &br, &bl);
+
+  uint pixel_count = w * h;
+
+  auto &rays_ = *rays;
+
+  rays_.resize(pixel_count * rays_per_pixel);
 
   float pix_w = (tr.x - tl.x) / w;
   float pix_h = (tr.y - br.y) / h;
 
-  switch (mode) {
-    case kSamplingMode_Default: {
-      uint ray_idx = 0;
-      for (float y = br.y + pix_h * (1.0f / 2); y < tr.y; y += pix_h) {
-        for (float x = tl.x + pix_w * (1.0f / 2); x < tr.x; x += pix_w) {
-          rays_[ray_idx].position = glm::vec3(x, y, proj_plane_z);
-          rays_[ray_idx].direction =
-              glm::normalize(rays_[ray_idx].position - *camera_pos);
-          ++ray_idx;
-        }
+  std::default_random_engine re(std::random_device{}());
+  std::uniform_real_distribution<float> distrib(0, 1);
+
+  uint i = 0;
+  for (float y = br.y; y < tr.y - kTolerance; y += pix_h) {
+    for (float x = tl.x; x < tr.x - kTolerance; x += pix_w) {
+      for (uint j = 0; j < rays_per_pixel; ++j) {
+        float x_offset = pix_w * distrib(re);
+        float y_offset = pix_h * distrib(re);
+        uint k = i * rays_per_pixel + j;
+        rays_[k].position = glm::vec3(x + x_offset, y + y_offset, proj_plane_z);
+        rays_[k].direction = glm::normalize(rays_[k].position - *camera_pos);
       }
-
-      break;
-    }
-    case kSamplingMode_Jitter: {
-      std::default_random_engine re(std::random_device{}());
-      std::uniform_real_distribution<float> distrib(0, 1);
-
-      uint ray_idx = 0;
-      for (float y = br.y; y < tr.y - kTolerance; y += pix_h) {
-        for (float x = tl.x; x < tr.x - kTolerance; x += pix_w) {
-          for (int i = 0; i < config.rays_per_pixel; ++i) {
-            float x_offset = pix_w * distrib(re);
-            float y_offset = pix_h * distrib(re);
-            uint j = ray_idx * config.rays_per_pixel + i;
-            rays_[j].position =
-                glm::vec3(x + x_offset, y + y_offset, proj_plane_z);
-            rays_[j].direction =
-                glm::normalize(rays_[j].position - *camera_pos);
-          }
-          ++ray_idx;
-        }
-      }
-
-      break;
+      ++i;
     }
   }
 }
@@ -653,11 +671,10 @@ int main(int argc, char **argv) {
 
   std::vector<Ray> rays;
   if (config.rays_per_pixel == 1) {
-    MakeRays(kSamplingMode_Default, &camera_position, IMG_W, IMG_H, FOV,
-             FOCAL_LEN, &rays);
+    MakeDefaultRays(&camera_position, IMG_W, IMG_H, FOV, FOCAL_LEN, &rays);
   } else if (config.rays_per_pixel > 1) {
-    MakeRays(kSamplingMode_Jitter, &camera_position, IMG_W, IMG_H, FOV,
-             FOCAL_LEN, &rays);
+    MakeJitteredRays(&camera_position, IMG_W, IMG_H, FOV, FOCAL_LEN,
+                     config.rays_per_pixel, &rays);
   }
 
   for (uint i = 0; i < kImgArea; ++i) {
