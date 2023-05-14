@@ -49,7 +49,6 @@ const glm::vec3 camera_position(0, 0, 0);
 
 uchar buffer[IMG_H][IMG_W][3];
 
-Light lights[MAX_LIGHTS];
 glm::vec3 ambient_light;
 
 void PlotPixelDisplay(int x, int y, uchar r, uchar g, uchar b) {
@@ -396,12 +395,13 @@ float GetPhongColor(float lightColor, float diffuse, float specular, float ln,
 }
 
 glm::vec3 Shade(Intersection *surface, Sphere *spheres, uint sphere_count,
-                Triangle *triangles, uint triangle_count, int bounces,
-                uint light_count, const Lights *extra_lights);
+                Triangle *triangles, uint triangle_count, Light *lights,
+                uint light_count, int bounces, const Lights *extra_lights);
 
 glm::vec3 TraceRay(Ray *ray, Sphere *spheres, uint sphere_count,
-                   Triangle *triangles, uint triangle_count, Intersection *prev,
-                   int bounces, uint light_count, const Lights *extra_lights) {
+                   Triangle *triangles, uint triangle_count, Light *lights,
+                   uint light_count, Intersection *prev, int bounces,
+                   const Lights *extra_lights) {
   Intersection closest;
   Intersect(ray, spheres, sphere_count, triangles, triangle_count, prev,
             &closest);
@@ -409,13 +409,18 @@ glm::vec3 TraceRay(Ray *ray, Sphere *spheres, uint sphere_count,
     return backgroundColor;
   } else {
     return Shade(&closest, spheres, sphere_count, triangles, triangle_count,
-                 bounces, light_count, extra_lights);
+                 lights, light_count, bounces, extra_lights);
   }
 }
 
 glm::vec3 Shade(Intersection *surface, Sphere *spheres, uint sphere_count,
-                Triangle *triangles, uint triangle_count, int bounces,
-                uint light_count, const Lights *extra_lights) {
+                Triangle *triangles, uint triangle_count, Light *lights,
+                uint light_count, int bounces, const Lights *extra_lights) {
+  assert(surface);
+  assert(spheres);
+  assert(triangles);
+  assert(lights);
+
   int index;
   glm::vec3 p;  // point of intersection
   glm::vec3 n;  // normal;
@@ -520,9 +525,9 @@ glm::vec3 Shade(Intersection *surface, Sphere *spheres, uint sphere_count,
   if (bounces > 0) {
     Ray reflectedRay;
     GetReflectedRay(surface->ray, spheres, triangles, surface, &reflectedRay);
-    glm::vec3 reflectedColor = TraceRay(&reflectedRay, spheres, sphere_count,
-                                        triangles, triangle_count, surface,
-                                        bounces - 1, light_count, extra_lights);
+    glm::vec3 reflectedColor = TraceRay(
+        &reflectedRay, spheres, sphere_count, triangles, triangle_count, lights,
+        light_count, surface, bounces - 1, extra_lights);
     for (int c = 0; c < 3; ++c) {
       phongColor[c] *= (1 - color_specular[c]);
       phongColor[c] += color_specular[c] * reflectedColor[c];
@@ -574,12 +579,12 @@ int main(int argc, char **argv) {
     render_target = kRenderTarget_Jpeg;
   }
 
-  uint light_count;
   std::vector<Sphere> spheres;
   std::vector<Triangle> triangles;
+  std::vector<Light> lights;
 
   st = LoadScene(config.scene_filepath, &ambient_light, &triangles, &spheres,
-                 lights, &light_count);
+                 &lights);
   if (st != kStatus_Ok) {
     std::fprintf(stderr, "Failed to load scene.\n");
     return EXIT_FAILURE;
@@ -600,11 +605,11 @@ int main(int argc, char **argv) {
     std::default_random_engine re(std::random_device{}());
     std::uniform_real_distribution<float> distrib(-1, 1);
 
-    uint count = light_count * config.extra_lights_per_light;
+    uint count = lights.size() * config.extra_lights_per_light;
     extra_lights.positions.resize(count);
     extra_lights.colors.resize(count);
 
-    for (uint i = 0; i < light_count; ++i) {
+    for (uint i = 0; i < lights.size(); ++i) {
       for (uint j = 0; j < config.extra_lights_per_light; ++j) {
         float x = distrib(re);
         float y = distrib(re);
@@ -630,10 +635,10 @@ int main(int argc, char **argv) {
     uint y = i / IMG_W;
     glm::vec3 total_color(0, 0, 0);
     for (int j = 0; j < config.rays_per_pixel; ++j) {
-      total_color +=
-          TraceRay(&rays[i][j], spheres.data(), spheres.size(),
-                   triangles.data(), triangles.size(), NULL,
-                   config.reflection_bounces, light_count, &extra_lights);
+      total_color += TraceRay(&rays[i][j], spheres.data(), spheres.size(),
+                              triangles.data(), triangles.size(), lights.data(),
+                              lights.size(), NULL, config.reflection_bounces,
+                              &extra_lights);
     }
     for (int j = 0; j < kRgbChannel__Count; ++j) {
       buffer[y][x][j] =

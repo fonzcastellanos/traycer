@@ -181,12 +181,11 @@ Status ParseLight(std::FILE *f, Light *l) {
 
 Status LoadScene(const char *filepath, glm::vec3 *ambient_light,
                  std::vector<Triangle> *triangles, std::vector<Sphere> *spheres,
-                 Light *lights, uint *light_count) {
+                 std::vector<Light> *lights) {
   assert(filepath);
   assert(triangles);
   assert(spheres);
   assert(lights);
-  assert(light_count);
 
   std::FILE *file = std::fopen(filepath, "r");
   if (!file) {
@@ -196,7 +195,6 @@ Status LoadScene(const char *filepath, glm::vec3 *ambient_light,
 
   uint obj_count;
   char type[50];
-  Light l;
 
   int rc = std::fscanf(file, "%u", &obj_count);
   if (rc != 1) {
@@ -241,22 +239,14 @@ Status LoadScene(const char *filepath, glm::vec3 *ambient_light,
 
       spheres->push_back(sph);
     } else if (std::strcmp(type, "light") == 0) {
+      Light l;
       st = ParseLight(file, &l);
       if (st != kStatus_Ok) {
         std::fprintf(stderr, "Failed to parse light.\n");
         return st;
       }
 
-      if (*light_count == MAX_LIGHTS) {
-        std::fprintf(stderr,
-                     "Too many lights. Increase MAX_LIGHTS if more lights are "
-                     "desired.\n");
-        // TODO: Choose a better-suited status.
-        return kStatus_UnspecifiedError;
-      }
-
-      lights[*light_count] = l;
-      ++(*light_count);
+      lights->push_back(l);
     } else {
       std::fprintf(stderr, "Invalid object type \"%s\" in scene file %s\n",
                    type, filepath);
