@@ -132,7 +132,11 @@ void Idle() {
 }
 
 static void MakeRays(SamplingMode mode, uint w, uint h, float fov,
-                     float focal_len, std::vector<std::vector<Ray>> *rays) {
+                     float focal_len, std::vector<Ray> *rays) {
+  constexpr float kTolerance = 0.00001;
+
+  assert(fov > kTolerance);
+  assert(focal_len > kTolerance);
   assert(rays);
 
   // Calculate projection plane corners.
@@ -144,16 +148,11 @@ static void MakeRays(SamplingMode mode, uint w, uint h, float fov,
   glm::vec3 br(aspect * tan_half_fov, -tan_half_fov, proj_plane_z);
   glm::vec3 bl(-aspect * tan_half_fov, -tan_half_fov, proj_plane_z);
 
-  constexpr float kTolerance = 0.00001;
-
   uint pixel_count = w * h;
 
   auto &rays_ = *rays;
 
-  rays_.resize(pixel_count);
-  for (uint i = 0; i < pixel_count; ++i) {
-    rays_[i].resize(config.rays_per_pixel);
-  }
+  rays_.resize(pixel_count * config.rays_per_pixel);
 
   float pix_w = (tr.x - tl.x) / w;
   float pix_h = (tr.y - br.y) / h;
@@ -163,9 +162,9 @@ static void MakeRays(SamplingMode mode, uint w, uint h, float fov,
       uint ray_idx = 0;
       for (float y = br.y + pix_h * (1.0f / 2); y < tr.y; y += pix_h) {
         for (float x = tl.x + pix_w * (1.0f / 2); x < tr.x; x += pix_w) {
-          rays_[ray_idx][0].position = glm::vec3(x, y, proj_plane_z);
-          rays_[ray_idx][0].direction =
-              glm::normalize(rays_[ray_idx][0].position - camera_position);
+          rays_[ray_idx].position = glm::vec3(x, y, proj_plane_z);
+          rays_[ray_idx].direction =
+              glm::normalize(rays_[ray_idx].position - camera_position);
           ++ray_idx;
         }
       }
@@ -182,10 +181,11 @@ static void MakeRays(SamplingMode mode, uint w, uint h, float fov,
           for (int i = 0; i < config.rays_per_pixel; ++i) {
             float x_offset = pix_w * distrib(re);
             float y_offset = pix_h * distrib(re);
-            rays_[ray_idx][i].position =
+            uint j = ray_idx * config.rays_per_pixel + i;
+            rays_[j].position =
                 glm::vec3(x + x_offset, y + y_offset, proj_plane_z);
-            rays_[ray_idx][i].direction =
-                glm::normalize(rays_[ray_idx][i].position - camera_position);
+            rays_[j].direction =
+                glm::normalize(rays_[j].position - camera_position);
           }
           ++ray_idx;
         }
@@ -349,7 +349,8 @@ static void Intersect(Ray *ray, Sphere *spheres, uint sphere_count,
   out->hit = false;
 
   Intersection current;
-  // sphere intersections
+
+  // Spheres
   for (uint i = 0; i < sphere_count; ++i) {
     if (prev != NULL && prev->type == kGeometryType_Sphere &&
         prev->sphere_data.index == i) {
@@ -368,7 +369,8 @@ static void Intersect(Ray *ray, Sphere *spheres, uint sphere_count,
     out->t = current.t;
     out->hit = current.hit;
   }
-  // triangle intersections
+
+  // Triangles
   for (uint i = 0; i < triangle_count; ++i) {
     if (prev != NULL && prev->type == kGeometryType_Triangle &&
         prev->triangle_data.index == i) {
@@ -628,7 +630,7 @@ int main(int argc, char **argv) {
     }
   }
 
-  std::vector<std::vector<Ray>> rays;
+  std::vector<Ray> rays;
   if (config.rays_per_pixel == 1) {
     MakeRays(kSamplingMode_Default, IMG_W, IMG_H, FOV, FOCAL_LEN, &rays);
   } else if (config.rays_per_pixel > 1) {
@@ -640,10 +642,10 @@ int main(int argc, char **argv) {
     uint y = i / IMG_W;
     glm::vec3 total_color(0, 0, 0);
     for (int j = 0; j < config.rays_per_pixel; ++j) {
-      total_color += TraceRay(&rays[i][j], spheres.data(), spheres.size(),
-                              triangles.data(), triangles.size(), lights.data(),
-                              lights.size(), NULL, config.reflection_bounces,
-                              &extra_lights);
+      total_color += TraceRay(&rays[i * config.rays_per_pixel + j],
+                              spheres.data(), spheres.size(), triangles.data(),
+                              triangles.size(), lights.data(), lights.size(),
+                              NULL, config.reflection_bounces, &extra_lights);
     }
     for (int j = 0; j < kRgbChannel__Count; ++j) {
       buffer[y][x][j] =
