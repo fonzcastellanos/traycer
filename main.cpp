@@ -51,25 +51,25 @@ uchar buffer[IMG_H][IMG_W][3];
 
 glm::vec3 ambient_light;
 
-void PlotPixelDisplay(int x, int y, uchar r, uchar g, uchar b) {
+static void PlotPixelDisplay(int x, int y, uchar r, uchar g, uchar b) {
   glColor3f(r * (1.0f / 255), g * (1.0f / 255), b * (1.0f / 255));
   glVertex2i(x, y);
 }
 
-void PlotPixelJpeg(int x, int y, uchar r, uchar g, uchar b) {
+static void PlotPixelJpeg(int x, int y, uchar r, uchar g, uchar b) {
   buffer[y][x][0] = r;
   buffer[y][x][1] = g;
   buffer[y][x][2] = b;
 }
 
-void PlotPixel(int x, int y, uchar r, uchar g, uchar b) {
+static void PlotPixel(int x, int y, uchar r, uchar g, uchar b) {
   PlotPixelDisplay(x, y, r, g, b);
   if (render_target == kRenderTarget_Jpeg) {
     PlotPixelJpeg(x, y, r, g, b);
   }
 }
 
-void DrawScene() {
+static void DrawScene() {
   for (uint x = 0; x < IMG_W; ++x) {
     glPointSize(2);
     glBegin(GL_POINTS);
@@ -83,7 +83,7 @@ void DrawScene() {
   fflush(stdout);
 }
 
-Status SaveJpeg() {
+static Status SaveJpeg() {
   std::printf("Saving JPEG file %s.\n", config.render_filepath);
 
   stbi_flip_vertically_on_write(1);
@@ -98,9 +98,9 @@ Status SaveJpeg() {
   return kStatus_Ok;
 }
 
-void Display() {}
+static void Display() {}
 
-void Init() {
+static void Init() {
   glMatrixMode(GL_PROJECTION);
   glOrtho(0, IMG_W, 0, IMG_H, 1, -1);
   glMatrixMode(GL_MODELVIEW);
@@ -110,7 +110,7 @@ void Init() {
   glClear(GL_COLOR_BUFFER_BIT);
 }
 
-void idle() {
+void Idle() {
   // hack to make it only draw once
   static int once = 0;
   if (!once) {
@@ -131,7 +131,10 @@ void idle() {
   once = 1;
 }
 
-Ray **MakeRays(SamplingMode mode, uint w, uint h, float fov, float focal_len) {
+static void MakeRays(SamplingMode mode, uint w, uint h, float fov,
+                     float focal_len, std::vector<std::vector<Ray>> *rays) {
+  assert(rays);
+
   // Calculate projection plane corners.
   float proj_plane_z = -focal_len;
   float aspect = (float)w / h;
@@ -145,9 +148,11 @@ Ray **MakeRays(SamplingMode mode, uint w, uint h, float fov, float focal_len) {
 
   uint pixel_count = w * h;
 
-  Ray **rays = new Ray *[pixel_count];
+  auto &rays_ = *rays;
+
+  rays_.resize(pixel_count);
   for (uint i = 0; i < pixel_count; ++i) {
-    rays[i] = new Ray[config.rays_per_pixel];
+    rays_[i].resize(config.rays_per_pixel);
   }
 
   float pix_w = (tr.x - tl.x) / w;
@@ -158,9 +163,9 @@ Ray **MakeRays(SamplingMode mode, uint w, uint h, float fov, float focal_len) {
       uint ray_idx = 0;
       for (float y = br.y + pix_h * (1.0f / 2); y < tr.y; y += pix_h) {
         for (float x = tl.x + pix_w * (1.0f / 2); x < tr.x; x += pix_w) {
-          rays[ray_idx][0].position = glm::vec3(x, y, proj_plane_z);
-          rays[ray_idx][0].direction =
-              glm::normalize(rays[ray_idx][0].position - camera_position);
+          rays_[ray_idx][0].position = glm::vec3(x, y, proj_plane_z);
+          rays_[ray_idx][0].direction =
+              glm::normalize(rays_[ray_idx][0].position - camera_position);
           ++ray_idx;
         }
       }
@@ -177,10 +182,10 @@ Ray **MakeRays(SamplingMode mode, uint w, uint h, float fov, float focal_len) {
           for (int i = 0; i < config.rays_per_pixel; ++i) {
             float x_offset = pix_w * distrib(re);
             float y_offset = pix_h * distrib(re);
-            rays[ray_idx][i].position =
+            rays_[ray_idx][i].position =
                 glm::vec3(x + x_offset, y + y_offset, proj_plane_z);
-            rays[ray_idx][i].direction =
-                glm::normalize(rays[ray_idx][i].position - camera_position);
+            rays_[ray_idx][i].direction =
+                glm::normalize(rays_[ray_idx][i].position - camera_position);
           }
           ++ray_idx;
         }
@@ -189,12 +194,10 @@ Ray **MakeRays(SamplingMode mode, uint w, uint h, float fov, float focal_len) {
       break;
     }
   }
-
-  return rays;
 }
 
-void GetReflectedRay(Ray *ray, Sphere *spheres, Triangle *triangles,
-                     Intersection *in, Ray *reflected_ray) {
+static void GetReflectedRay(Ray *ray, Sphere *spheres, Triangle *triangles,
+                            Intersection *in, Ray *reflected_ray) {
   assert(ray);
   assert(spheres);
   assert(triangles);
@@ -221,8 +224,8 @@ void GetReflectedRay(Ray *ray, Sphere *spheres, Triangle *triangles,
   reflected_ray->position = p;
 }
 
-void IntersectSphere(Ray *ray, Sphere *spheres, uint sphere_idx,
-                     Intersection *out) {
+static void IntersectSphere(Ray *ray, Sphere *spheres, uint sphere_idx,
+                            Intersection *out) {
   assert(ray);
   assert(spheres);
   assert(out);
@@ -261,8 +264,8 @@ void IntersectSphere(Ray *ray, Sphere *spheres, uint sphere_idx,
   }
 }
 
-void IntersectTriangle(Ray *ray, Triangle *triangles, int triangle_idx,
-                       Intersection *out) {
+static void IntersectTriangle(Ray *ray, Triangle *triangles, int triangle_idx,
+                              Intersection *out) {
   assert(ray);
   assert(out);
 
@@ -332,9 +335,9 @@ void IntersectTriangle(Ray *ray, Triangle *triangles, int triangle_idx,
   out->hit = true;
 }
 
-void Intersect(Ray *ray, Sphere *spheres, uint sphere_count,
-               Triangle *triangles, uint triangle_count, Intersection *prev,
-               Intersection *out) {
+static void Intersect(Ray *ray, Sphere *spheres, uint sphere_count,
+                      Triangle *triangles, uint triangle_count,
+                      Intersection *prev, Intersection *out) {
   assert(ray);
   assert(spheres);
   assert(triangles);
@@ -389,19 +392,20 @@ void Intersect(Ray *ray, Sphere *spheres, uint sphere_count,
   }
 }
 
-float GetPhongColor(float lightColor, float diffuse, float specular, float ln,
-                    float rv, float shininess) {
+static float GetPhongColor(float lightColor, float diffuse, float specular,
+                           float ln, float rv, float shininess) {
   return lightColor * (diffuse * ln + specular * glm::pow(rv, shininess));
 }
 
-glm::vec3 Shade(Intersection *surface, Sphere *spheres, uint sphere_count,
-                Triangle *triangles, uint triangle_count, Light *lights,
-                uint light_count, int bounces, const Lights *extra_lights);
+static glm::vec3 Shade(Intersection *surface, Sphere *spheres,
+                       uint sphere_count, Triangle *triangles,
+                       uint triangle_count, Light *lights, uint light_count,
+                       int bounces, const Lights *extra_lights);
 
-glm::vec3 TraceRay(Ray *ray, Sphere *spheres, uint sphere_count,
-                   Triangle *triangles, uint triangle_count, Light *lights,
-                   uint light_count, Intersection *prev, int bounces,
-                   const Lights *extra_lights) {
+static glm::vec3 TraceRay(Ray *ray, Sphere *spheres, uint sphere_count,
+                          Triangle *triangles, uint triangle_count,
+                          Light *lights, uint light_count, Intersection *prev,
+                          int bounces, const Lights *extra_lights) {
   Intersection closest;
   Intersect(ray, spheres, sphere_count, triangles, triangle_count, prev,
             &closest);
@@ -413,9 +417,10 @@ glm::vec3 TraceRay(Ray *ray, Sphere *spheres, uint sphere_count,
   }
 }
 
-glm::vec3 Shade(Intersection *surface, Sphere *spheres, uint sphere_count,
-                Triangle *triangles, uint triangle_count, Light *lights,
-                uint light_count, int bounces, const Lights *extra_lights) {
+static glm::vec3 Shade(Intersection *surface, Sphere *spheres,
+                       uint sphere_count, Triangle *triangles,
+                       uint triangle_count, Light *lights, uint light_count,
+                       int bounces, const Lights *extra_lights) {
   assert(surface);
   assert(spheres);
   assert(triangles);
@@ -537,7 +542,7 @@ glm::vec3 Shade(Intersection *surface, Sphere *spheres, uint sphere_count,
   return phongColor;
 }
 
-Status ParseConfig(uint argc, char *argv[], Config *c) {
+static Status ParseConfig(uint argc, char *argv[], Config *c) {
   assert(argv);
   assert(c);
 
@@ -596,7 +601,7 @@ int main(int argc, char **argv) {
   // TODO: Destroy window upon exiting program.
   glutCreateWindow(kWindowName);
   glutDisplayFunc(Display);
-  glutIdleFunc(idle);
+  glutIdleFunc(Idle);
   Init();
 
   Lights extra_lights;
@@ -623,11 +628,11 @@ int main(int argc, char **argv) {
     }
   }
 
-  Ray **rays = 0;
+  std::vector<std::vector<Ray>> rays;
   if (config.rays_per_pixel == 1) {
-    rays = MakeRays(kSamplingMode_Default, IMG_W, IMG_H, FOV, FOCAL_LEN);
+    MakeRays(kSamplingMode_Default, IMG_W, IMG_H, FOV, FOCAL_LEN, &rays);
   } else if (config.rays_per_pixel > 1) {
-    rays = MakeRays(kSamplingMode_Jitter, IMG_W, IMG_H, FOV, FOCAL_LEN);
+    MakeRays(kSamplingMode_Jitter, IMG_W, IMG_H, FOV, FOCAL_LEN, &rays);
   }
 
   for (uint i = 0; i < kImgArea; ++i) {
@@ -645,7 +650,6 @@ int main(int argc, char **argv) {
           glm::clamp<float>(total_color[j] / config.rays_per_pixel, 0, 1) * 255;
     }
   }
-  delete[] rays;
 
   glutMainLoop();
 }
