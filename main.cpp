@@ -38,7 +38,6 @@
 const char *kWindowName = "traycer";
 
 constexpr uint kImgArea = IMG_W * IMG_H;
-constexpr float kAspectRatio = (float)IMG_W / IMG_H;
 
 const float eps = 0.00000001;
 const glm::vec3 backgroundColor(1, 1, 1);
@@ -203,14 +202,14 @@ Ray **MakeRays(SamplingMode mode, uint w, uint h, float fov, float focal_len) {
 void GetReflectedRay(Ray *ray, Intersection *in, Ray *reflected_ray) {
   glm::vec3 p = ray->position + in->t * ray->direction;
   glm::vec3 n;
-  if (in->type == SPHERE) {
-    int s = in->data.sphere.index;
+  if (in->type == kGeometryType_Sphere) {
+    int s = in->sphere_data.index;
     n = (p - spheres[s].position) / spheres[s].radius;
-  } else if (in->type == TRIANGLE) {
-    int tri = in->data.triangle.index;
-    float alpha = in->data.triangle.alpha;
-    float beta = in->data.triangle.beta;
-    float gamma = in->data.triangle.gamma;
+  } else if (in->type == kGeometryType_Triangle) {
+    int tri = in->triangle_data.index;
+    float alpha = in->triangle_data.alpha;
+    float beta = in->triangle_data.beta;
+    float gamma = in->triangle_data.gamma;
 
     n = triangles[tri].v[0].normal * alpha + triangles[tri].v[1].normal * beta +
         triangles[tri].v[2].normal * gamma;
@@ -226,8 +225,8 @@ void IntersectSphere(Ray *ray, int s, Intersection *out) {
     return;
   }
 
-  out->type = SPHERE;
-  out->data.sphere.index = s;
+  out->type = kGeometryType_Sphere;
+  out->sphere_data.index = s;
   out->ray = ray;
   out->hit = false;
 
@@ -264,8 +263,8 @@ void IntersectTriangle(Ray *ray, int tri, Intersection *out) {
     return;
   }
 
-  out->type = TRIANGLE;
-  out->data.triangle.index = tri;
+  out->type = kGeometryType_Triangle;
+  out->triangle_data.index = tri;
   out->ray = ray;
   out->hit = false;
 
@@ -323,9 +322,9 @@ void IntersectTriangle(Ray *ray, int tri, Intersection *out) {
 
   float beta = glm::length(np) / twiceTriArea;
 
-  out->data.triangle.alpha = alpha;
-  out->data.triangle.beta = beta;
-  out->data.triangle.gamma = gamma;
+  out->triangle_data.alpha = alpha;
+  out->triangle_data.beta = beta;
+  out->triangle_data.gamma = gamma;
   out->t = t;
   out->hit = true;
 }
@@ -341,7 +340,8 @@ void Intersect(Ray *ray, Intersection *prev, Intersection *out) {
   Intersection current;
   // sphere intersections
   for (int s = 0; s < sphere_count; ++s) {
-    if (prev != NULL && prev->type == SPHERE && prev->data.sphere.index == s) {
+    if (prev != NULL && prev->type == kGeometryType_Sphere &&
+        prev->sphere_data.index == s) {
       continue;
     }
 
@@ -352,15 +352,15 @@ void Intersect(Ray *ray, Intersection *prev, Intersection *out) {
     }
 
     out->type = current.type;
-    out->data.sphere.index = current.data.sphere.index;
+    out->sphere_data.index = current.sphere_data.index;
     out->ray = current.ray;
     out->t = current.t;
     out->hit = current.hit;
   }
   // triangle intersections
   for (int tri = 0; tri < triangle_count; ++tri) {
-    if (prev != NULL && prev->type == TRIANGLE &&
-        prev->data.triangle.index == tri) {
+    if (prev != NULL && prev->type == kGeometryType_Triangle &&
+        prev->triangle_data.index == tri) {
       continue;
     }
 
@@ -371,10 +371,10 @@ void Intersect(Ray *ray, Intersection *prev, Intersection *out) {
     }
 
     out->type = current.type;
-    out->data.triangle.index = current.data.triangle.index;
-    out->data.triangle.alpha = current.data.triangle.alpha;
-    out->data.triangle.beta = current.data.triangle.beta;
-    out->data.triangle.gamma = current.data.triangle.gamma;
+    out->triangle_data.index = current.triangle_data.index;
+    out->triangle_data.alpha = current.triangle_data.alpha;
+    out->triangle_data.beta = current.triangle_data.beta;
+    out->triangle_data.gamma = current.triangle_data.gamma;
     out->ray = current.ray;
     out->t = current.t;
     out->hit = current.hit;
@@ -410,21 +410,21 @@ glm::vec3 Shade(Intersection *surface, int bounces, uint light_count,
   float shininess;
 
   // calculate surface-specific parameters
-  if (surface->type == SPHERE) {
-    index = surface->data.sphere.index;
+  if (surface->type == kGeometryType_Sphere) {
+    index = surface->sphere_data.index;
     p = surface->ray->position +
         surface->t * (surface->ray->direction);  // point of intersection
     n = (p - spheres[index].position) / spheres[index].radius;  // normal
     color_diffuse = spheres[index].color_diffuse;
     color_specular = spheres[index].color_specular;
     shininess = spheres[index].shininess;
-  } else if (surface->type == TRIANGLE) {
-    index = surface->data.triangle.index;
+  } else if (surface->type == kGeometryType_Triangle) {
+    index = surface->triangle_data.index;
     p = surface->ray->position + surface->t * (surface->ray->direction);
 
-    float alpha = surface->data.triangle.alpha;
-    float beta = surface->data.triangle.beta;
-    float gamma = surface->data.triangle.gamma;
+    float alpha = surface->triangle_data.alpha;
+    float beta = surface->triangle_data.beta;
+    float gamma = surface->triangle_data.gamma;
 
     n = triangles[index].v[0].normal * alpha +
         triangles[index].v[1].normal * beta +
@@ -606,17 +606,17 @@ int main(int argc, char **argv) {
     rays = MakeRays(kSamplingMode_Jitter, IMG_W, IMG_H, FOV, FOCAL_LEN);
   }
 
-  for (uint p = 0; p < kImgArea; ++p) {
-    uint x = p % IMG_W;
-    uint y = p / IMG_W;
-    glm::vec3 totalColor(0, 0, 0);
-    for (int r = 0; r < config.rays_per_pixel; ++r) {
-      totalColor += TraceRay(&rays[p][r], NULL, config.reflection_bounces,
-                             light_count, &extra_lights);
+  for (uint i = 0; i < kImgArea; ++i) {
+    uint x = i % IMG_W;
+    uint y = i / IMG_W;
+    glm::vec3 total_color(0, 0, 0);
+    for (int j = 0; j < config.rays_per_pixel; ++j) {
+      total_color += TraceRay(&rays[i][j], NULL, config.reflection_bounces,
+                              light_count, &extra_lights);
     }
-    for (uint c = 0; c < 3; ++c) {
-      buffer[y][x][c] =
-          glm::clamp<float>(totalColor[c] / config.rays_per_pixel, 0, 1) * 255;
+    for (int j = 0; j < kRgbChannel__Count; ++j) {
+      buffer[y][x][j] =
+          glm::clamp<float>(total_color[j] / config.rays_per_pixel, 0, 1) * 255;
     }
   }
   delete[] rays;

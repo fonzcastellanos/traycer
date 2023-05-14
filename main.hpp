@@ -31,7 +31,7 @@ struct Ray {
   glm::vec3 direction;
 };
 
-enum ObjectType { SPHERE, TRIANGLE };
+enum GeometryType { kGeometryType_Sphere, kGeometryType_Triangle };
 
 struct TriangleData {
   int index;
@@ -44,14 +44,12 @@ struct SphereData {
   int index;
 };
 
-union ObjectData {
-  SphereData sphere;
-  TriangleData triangle;
-};
-
 struct Intersection {
-  ObjectType type;
-  ObjectData data;
+  GeometryType type;
+  union {
+    SphereData sphere_data;
+    TriangleData triangle_data;
+  };
   Ray *ray;
   float t;
   bool hit;
