@@ -11,11 +11,11 @@
 #endif
 
 #include <cassert>
-#include <cfloat>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <glm/glm.hpp>
+#include <limits>
 #include <random>
 #include <vector>
 
@@ -330,11 +330,11 @@ void IntersectTriangle(Ray *ray, int tri, Intersection *out) {
 }
 
 void Intersect(Ray *ray, Intersection *prev, Intersection *out) {
-  if (ray == NULL || out == NULL) {
-    return;
-  }
+  assert(ray);
+  assert(prev);
+
   out->ray = ray;
-  out->t = (float)FLT_MAX;
+  out->t = std::numeric_limits<float>::max();
   out->hit = false;
 
   Intersection current;
