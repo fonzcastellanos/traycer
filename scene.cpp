@@ -179,13 +179,10 @@ Status ParseLight(std::FILE *f, Light *l) {
   return kStatus_Ok;
 }
 
-Status LoadScene(const char *filepath, glm::vec3 *ambient_light,
-                 std::vector<Triangle> *triangles, std::vector<Sphere> *spheres,
-                 std::vector<Light> *lights) {
+Status LoadScene(const char *filepath, glm::vec3 *ambient_light, Scene *scene) {
   assert(filepath);
-  assert(triangles);
-  assert(spheres);
-  assert(lights);
+  assert(ambient_light);
+  assert(scene);
 
   std::FILE *file = std::fopen(filepath, "r");
   if (!file) {
@@ -211,6 +208,10 @@ Status LoadScene(const char *filepath, glm::vec3 *ambient_light,
     return kStatus_IoError;
   }
 
+  scene->light_count = 0;
+  scene->sphere_count = 0;
+  scene->triangle_count = 0;
+
   for (uint i = 0; i < obj_count; ++i) {
     int rc = std::fscanf(file, "%s\n", type);
     if (rc != 1) {
@@ -228,7 +229,8 @@ Status LoadScene(const char *filepath, glm::vec3 *ambient_light,
         return st;
       }
 
-      triangles->push_back(t);
+      scene->triangles[scene->triangle_count] = t;
+      ++scene->triangle_count;
     } else if (std::strcmp(type, "sphere") == 0) {
       Sphere sph;
       st = ParseSphere(file, &sph);
@@ -237,7 +239,8 @@ Status LoadScene(const char *filepath, glm::vec3 *ambient_light,
         return st;
       }
 
-      spheres->push_back(sph);
+      scene->spheres[scene->sphere_count] = sph;
+      ++scene->sphere_count;
     } else if (std::strcmp(type, "light") == 0) {
       Light l;
       st = ParseLight(file, &l);
@@ -246,7 +249,8 @@ Status LoadScene(const char *filepath, glm::vec3 *ambient_light,
         return st;
       }
 
-      lights->push_back(l);
+      scene->lights[scene->light_count] = l;
+      ++scene->light_count;
     } else {
       std::fprintf(stderr, "Invalid object type \"%s\" in scene file %s\n",
                    type, filepath);

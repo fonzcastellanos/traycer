@@ -442,34 +442,29 @@ static float GetPhongColor(float light_color, float diffuse, float specular,
   return light_color * (diffuse * ln + specular * glm::pow(rv, shininess));
 }
 
-static glm::vec3 Shade(Intersection *surface, Sphere *spheres,
-                       uint sphere_count, Triangle *triangles,
-                       uint triangle_count, Light *lights, uint light_count,
-                       int bounces, const Lights *extra_lights);
+static glm::vec3 Shade(Intersection *surface, Scene *scene, int bounces,
+                       const Lights *extra_lights);
 
-static glm::vec3 TraceRay(Ray *ray, Sphere *spheres, uint sphere_count,
-                          Triangle *triangles, uint triangle_count,
-                          Light *lights, uint light_count, Intersection *prev,
+static glm::vec3 TraceRay(Ray *ray, Scene *scene, Intersection *prev,
                           int bounces, const Lights *extra_lights) {
+  assert(ray);
+  assert(scene);
+
   Intersection closest;
-  Intersect(ray, spheres, sphere_count, triangles, triangle_count, prev,
-            &closest);
+  Intersect(ray, scene->spheres, scene->sphere_count, scene->triangles,
+            scene->triangle_count, prev, &closest);
   if (!closest.hit) {
     return background_color;
   } else {
-    return Shade(&closest, spheres, sphere_count, triangles, triangle_count,
-                 lights, light_count, bounces, extra_lights);
+    return Shade(&closest, scene, bounces, extra_lights);
   }
 }
 
-static glm::vec3 Shade(Intersection *surface, Sphere *spheres,
-                       uint sphere_count, Triangle *triangles,
-                       uint triangle_count, Light *lights, uint light_count,
-                       int bounces, const Lights *extra_lights) {
+static glm::vec3 Shade(Intersection *surface, Scene *scene, int bounces,
+                       const Lights *extra_lights) {
   assert(surface);
-  assert(spheres);
-  assert(triangles);
-  assert(lights);
+  assert(scene);
+  assert(extra_lights);
 
   int index;
   glm::vec3 p;  // point of intersection
@@ -477,6 +472,13 @@ static glm::vec3 Shade(Intersection *surface, Sphere *spheres,
   glm::vec3 color_diffuse;
   glm::vec3 color_specular;
   float shininess;
+
+  Triangle *triangles = scene->triangles;
+  uint triangle_count = scene->triangle_count;
+  Sphere *spheres = scene->spheres;
+  uint sphere_count = scene->sphere_count;
+  Light *lights = scene->lights;
+  uint light_count = scene->light_count;
 
   // calculate surface-specific parameters
   if (surface->type == kGeometryType_Sphere) {
@@ -575,9 +577,7 @@ static glm::vec3 Shade(Intersection *surface, Sphere *spheres,
   if (bounces > 0) {
     Ray ray;
     GetReflectedRay(surface->ray, spheres, triangles, surface, &ray);
-    glm::vec3 color =
-        TraceRay(&ray, spheres, sphere_count, triangles, triangle_count, lights,
-                 light_count, surface, bounces - 1, extra_lights);
+    glm::vec3 color = TraceRay(&ray, scene, surface, bounces - 1, extra_lights);
     for (int i = 0; i < kRgbChannel__Count; ++i) {
       phong_color[i] *= (1 - color_specular[i]);
       phong_color[i] += color_specular[i] * color[i];
@@ -629,12 +629,13 @@ int main(int argc, char **argv) {
     render_target = kRenderTarget_Jpeg;
   }
 
-  std::vector<Sphere> spheres;
-  std::vector<Triangle> triangles;
-  std::vector<Light> lights;
+  // std::vector<Sphere> spheres;
+  // std::vector<Triangle> triangles;
+  // std::vector<Light> lights;
 
-  st = LoadScene(config.scene_filepath, &ambient_light, &triangles, &spheres,
-                 &lights);
+  Scene scene;
+
+  st = LoadScene(config.scene_filepath, &ambient_light, &scene);
   if (st != kStatus_Ok) {
     std::fprintf(stderr, "Failed to load scene.\n");
     return EXIT_FAILURE;
@@ -655,11 +656,11 @@ int main(int argc, char **argv) {
     std::default_random_engine re(std::random_device{}());
     std::uniform_real_distribution<float> distrib(-1, 1);
 
-    uint count = lights.size() * config.extra_lights_per_light;
+    uint count = scene.light_count * config.extra_lights_per_light;
     extra_lights.positions.resize(count);
     extra_lights.colors.resize(count);
 
-    for (uint i = 0; i < lights.size(); ++i) {
+    for (uint i = 0; i < scene.light_count; ++i) {
       for (uint j = 0; j < config.extra_lights_per_light; ++j) {
         float x = distrib(re);
         float y = distrib(re);
@@ -667,8 +668,8 @@ int main(int argc, char **argv) {
 
         uint k = i * config.extra_lights_per_light + j;
 
-        extra_lights.positions[k] = lights[i].position + offset;
-        extra_lights.colors[k] = lights[i].color;
+        extra_lights.positions[k] = scene.lights[i].position + offset;
+        extra_lights.colors[k] = scene.lights[i].color;
       }
     }
   }
@@ -686,9 +687,7 @@ int main(int argc, char **argv) {
     uint y = i / IMG_W;
     glm::vec3 total_color(0, 0, 0);
     for (int j = 0; j < config.rays_per_pixel; ++j) {
-      total_color += TraceRay(&rays[i * config.rays_per_pixel + j],
-                              spheres.data(), spheres.size(), triangles.data(),
-                              triangles.size(), lights.data(), lights.size(),
+      total_color += TraceRay(&rays[i * config.rays_per_pixel + j], &scene,
                               NULL, config.reflection_bounces, &extra_lights);
     }
     for (int j = 0; j < kRgbChannel__Count; ++j) {
