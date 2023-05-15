@@ -47,8 +47,8 @@ struct SphereData {
 struct Intersection {
   GeometryType type;
   union {
-    SphereData sphere_data;
-    TriangleData triangle_data;
+    SphereData sphere;
+    TriangleData triangle;
   };
   Ray *ray;
   float t;

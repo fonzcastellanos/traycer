@@ -252,13 +252,13 @@ static void GetReflectedRay(Ray *ray, const Sphere *spheres,
   glm::vec3 p = ray->position + in->t * ray->direction;
   glm::vec3 n;
   if (in->type == kGeometryType_Sphere) {
-    int s = in->sphere_data.index;
+    int s = in->sphere.index;
     n = (p - spheres[s].position) / spheres[s].radius;
   } else if (in->type == kGeometryType_Triangle) {
-    int tri = in->triangle_data.index;
-    float alpha = in->triangle_data.alpha;
-    float beta = in->triangle_data.beta;
-    float gamma = in->triangle_data.gamma;
+    int tri = in->triangle.index;
+    float alpha = in->triangle.alpha;
+    float beta = in->triangle.beta;
+    float gamma = in->triangle.gamma;
 
     n = triangles[tri].v[0].normal * alpha + triangles[tri].v[1].normal * beta +
         triangles[tri].v[2].normal * gamma;
@@ -271,38 +271,43 @@ static void GetReflectedRay(Ray *ray, const Sphere *spheres,
 
 static void IntersectSphere(Ray *ray, const Sphere *spheres, uint sphere_idx,
                             Intersection *out) {
+  constexpr float kTolerance = 0.000001;
+
   assert(ray);
   assert(spheres);
   assert(out);
 
   out->type = kGeometryType_Sphere;
-  out->sphere_data.index = sphere_idx;
+  out->sphere.index = sphere_idx;
   out->ray = ray;
   out->hit = false;
 
-  // Calculate quadratic coefficients
-  glm::vec3 center_to_ray = ray->position - spheres[sphere_idx].position;
-  float b = 2 * glm::dot(ray->direction, center_to_ray);
-  float c = glm::pow(center_to_ray.x, 2) + glm::pow(center_to_ray.y, 2) +
-            glm::pow(center_to_ray.z, 2) -
-            glm::pow(spheres[sphere_idx].radius, 2);
+  // Calculate quadratic coefficients.
+  glm::vec3 sph_to_ray = ray->position - spheres[sphere_idx].position;
+  float b = 2 * glm::dot(ray->direction, sph_to_ray);
+  float c = sph_to_ray.x * sph_to_ray.x + sph_to_ray.y * sph_to_ray.y +
+            sph_to_ray.z * sph_to_ray.z -
+            spheres[sphere_idx].radius * spheres[sphere_idx].radius;
 
-  float discriminant = glm::pow(b, 2) - 4 * c;
+  float discriminant = b * b - 4 * c;
 
-  // Calculate roots and determine t
+  // Calculate roots and determine t.
   float t;
-  if (discriminant < -eps) {  // misses sphere
+  if (discriminant < -kTolerance) {  // Misses sphere.
     return;
-  } else if (glm::abs(discriminant) < eps) {  // hits sphere at one point
+  } else if (discriminant < kTolerance) {  // Hits sphere at one point.
     t = -b * 0.5f;
-  } else {  // hits sphere at two points
+  } else {  // Hits sphere at two points.
+    // Implemented this way to improve stability of calculation. Addresses the
+    // issue of when b and the root of the discriminant don't have the same sign
+    // but the values are very close to each other.
     float q = -0.5f * (b + glm::sign(b) * glm::sqrt(discriminant));
     float root1 = c / q;
     float root2 = q;
     t = glm::min(root1, root2);
   }
 
-  if (t > eps) {  // hit because ahead of origin
+  if (t > eps) {  // Hit because ahead of origin.
     out->t = t;
     out->hit = true;
   }
@@ -314,7 +319,7 @@ static void IntersectTriangle(Ray *ray, const Triangle *triangles,
   assert(out);
 
   out->type = kGeometryType_Triangle;
-  out->triangle_data.index = triangle_idx;
+  out->triangle.index = triangle_idx;
   out->ray = ray;
   out->hit = false;
 
@@ -372,9 +377,9 @@ static void IntersectTriangle(Ray *ray, const Triangle *triangles,
 
   float beta = glm::length(np) / twice_tri_area;
 
-  out->triangle_data.alpha = alpha;
-  out->triangle_data.beta = beta;
-  out->triangle_data.gamma = gamma;
+  out->triangle.alpha = alpha;
+  out->triangle.beta = beta;
+  out->triangle.gamma = gamma;
   out->t = t;
   out->hit = true;
 }
@@ -397,7 +402,7 @@ static void Intersect(Ray *ray, const Sphere *spheres, uint sphere_count,
   // Spheres
   for (uint i = 0; i < sphere_count; ++i) {
     if (prev != NULL && prev->type == kGeometryType_Sphere &&
-        prev->sphere_data.index == i) {
+        prev->sphere.index == i) {
       continue;
     }
 
@@ -408,7 +413,7 @@ static void Intersect(Ray *ray, const Sphere *spheres, uint sphere_count,
     }
 
     out->type = current.type;
-    out->sphere_data.index = current.sphere_data.index;
+    out->sphere.index = current.sphere.index;
     out->ray = current.ray;
     out->t = current.t;
     out->hit = current.hit;
@@ -417,7 +422,7 @@ static void Intersect(Ray *ray, const Sphere *spheres, uint sphere_count,
   // Triangles
   for (uint i = 0; i < triangle_count; ++i) {
     if (prev != NULL && prev->type == kGeometryType_Triangle &&
-        prev->triangle_data.index == i) {
+        prev->triangle.index == i) {
       continue;
     }
 
@@ -428,10 +433,10 @@ static void Intersect(Ray *ray, const Sphere *spheres, uint sphere_count,
     }
 
     out->type = current.type;
-    out->triangle_data.index = current.triangle_data.index;
-    out->triangle_data.alpha = current.triangle_data.alpha;
-    out->triangle_data.beta = current.triangle_data.beta;
-    out->triangle_data.gamma = current.triangle_data.gamma;
+    out->triangle.index = current.triangle.index;
+    out->triangle.alpha = current.triangle.alpha;
+    out->triangle.beta = current.triangle.beta;
+    out->triangle.gamma = current.triangle.gamma;
     out->ray = current.ray;
     out->t = current.t;
     out->hit = current.hit;
@@ -483,7 +488,7 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
 
   // calculate surface-specific parameters
   if (surface->type == kGeometryType_Sphere) {
-    index = surface->sphere_data.index;
+    index = surface->sphere.index;
     p = surface->ray->position +
         surface->t * (surface->ray->direction);  // point of intersection
     n = (p - spheres[index].position) / spheres[index].radius;  // normal
@@ -491,12 +496,12 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
     color_specular = spheres[index].color_specular;
     shininess = spheres[index].shininess;
   } else if (surface->type == kGeometryType_Triangle) {
-    index = surface->triangle_data.index;
+    index = surface->triangle.index;
     p = surface->ray->position + surface->t * (surface->ray->direction);
 
-    float alpha = surface->triangle_data.alpha;
-    float beta = surface->triangle_data.beta;
-    float gamma = surface->triangle_data.gamma;
+    float alpha = surface->triangle.alpha;
+    float beta = surface->triangle.beta;
+    float gamma = surface->triangle.gamma;
 
     n = triangles[index].v[0].normal * alpha +
         triangles[index].v[1].normal * beta +
