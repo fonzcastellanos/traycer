@@ -240,8 +240,9 @@ static void MakeJitteredRays(const glm::vec3 *camera_position, uint w, uint h,
   }
 }
 
-static void GetReflectedRay(Ray *ray, Sphere *spheres, Triangle *triangles,
-                            Intersection *in, Ray *reflected_ray) {
+static void GetReflectedRay(Ray *ray, const Sphere *spheres,
+                            const Triangle *triangles, Intersection *in,
+                            Ray *reflected_ray) {
   assert(ray);
   assert(spheres);
   assert(triangles);
@@ -268,7 +269,7 @@ static void GetReflectedRay(Ray *ray, Sphere *spheres, Triangle *triangles,
   reflected_ray->position = p;
 }
 
-static void IntersectSphere(Ray *ray, Sphere *spheres, uint sphere_idx,
+static void IntersectSphere(Ray *ray, const Sphere *spheres, uint sphere_idx,
                             Intersection *out) {
   assert(ray);
   assert(spheres);
@@ -307,8 +308,8 @@ static void IntersectSphere(Ray *ray, Sphere *spheres, uint sphere_idx,
   }
 }
 
-static void IntersectTriangle(Ray *ray, Triangle *triangles, int triangle_idx,
-                              Intersection *out) {
+static void IntersectTriangle(Ray *ray, const Triangle *triangles,
+                              int triangle_idx, Intersection *out) {
   assert(ray);
   assert(out);
 
@@ -318,7 +319,7 @@ static void IntersectTriangle(Ray *ray, Triangle *triangles, int triangle_idx,
   out->hit = false;
 
   // Alias for vertices
-  Vertex(&v)[3] = triangles[triangle_idx].v;
+  const Vertex(&v)[3] = triangles[triangle_idx].v;
 
   // Calculate triangle normal
   glm::vec3 edge01 = v[1].position - v[0].position;
@@ -378,8 +379,8 @@ static void IntersectTriangle(Ray *ray, Triangle *triangles, int triangle_idx,
   out->hit = true;
 }
 
-static void Intersect(Ray *ray, Sphere *spheres, uint sphere_count,
-                      Triangle *triangles, uint triangle_count,
+static void Intersect(Ray *ray, const Sphere *spheres, uint sphere_count,
+                      const Triangle *triangles, uint triangle_count,
                       Intersection *prev, Intersection *out) {
   assert(ray);
   assert(spheres);
@@ -442,10 +443,10 @@ static float GetPhongColor(float light_color, float diffuse, float specular,
   return light_color * (diffuse * ln + specular * glm::pow(rv, shininess));
 }
 
-static glm::vec3 Shade(Intersection *surface, Scene *scene, int bounces,
+static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
                        const Lights *extra_lights);
 
-static glm::vec3 TraceRay(Ray *ray, Scene *scene, Intersection *prev,
+static glm::vec3 TraceRay(Ray *ray, const Scene *scene, Intersection *prev,
                           int bounces, const Lights *extra_lights) {
   assert(ray);
   assert(scene);
@@ -460,7 +461,7 @@ static glm::vec3 TraceRay(Ray *ray, Scene *scene, Intersection *prev,
   }
 }
 
-static glm::vec3 Shade(Intersection *surface, Scene *scene, int bounces,
+static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
                        const Lights *extra_lights) {
   assert(surface);
   assert(scene);
@@ -473,11 +474,11 @@ static glm::vec3 Shade(Intersection *surface, Scene *scene, int bounces,
   glm::vec3 color_specular;
   float shininess;
 
-  Triangle *triangles = scene->triangles;
+  const Triangle *triangles = scene->triangles;
   uint triangle_count = scene->triangle_count;
-  Sphere *spheres = scene->spheres;
+  const Sphere *spheres = scene->spheres;
   uint sphere_count = scene->sphere_count;
-  Light *lights = scene->lights;
+  const Light *lights = scene->lights;
   uint light_count = scene->light_count;
 
   // calculate surface-specific parameters
