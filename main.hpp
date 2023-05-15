@@ -33,22 +33,22 @@ struct Ray {
 
 enum GeometryType { kGeometryType_Sphere, kGeometryType_Triangle };
 
-struct TriangleData {
+struct TriangleIntersection {
   uint index;
   float alpha;
   float beta;
   float gamma;
 };
 
-struct SphereData {
+struct SphereIntersection {
   uint index;
 };
 
 struct Intersection {
   GeometryType type;
   union {
-    SphereData sphere;
-    TriangleData triangle;
+    SphereIntersection sphere;
+    TriangleIntersection triangle;
   };
   Ray *ray;
   float t;

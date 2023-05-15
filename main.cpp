@@ -452,13 +452,6 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
   assert(scene);
   assert(extra_lights);
 
-  int index;
-  glm::vec3 p;  // point of intersection
-  glm::vec3 n;  // normal;
-  glm::vec3 color_diffuse;
-  glm::vec3 color_specular;
-  float shininess;
-
   const Triangle *triangles = scene->triangles;
   uint triangle_count = scene->triangle_count;
   const Sphere *spheres = scene->spheres;
@@ -466,63 +459,74 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
   const Light *lights = scene->lights;
   uint light_count = scene->light_count;
 
+  glm::vec3 intersection_position;
+  glm::vec3 normal;
+  glm::vec3 color_diffuse;
+  glm::vec3 color_specular;
+  float shininess;
+
   // calculate surface-specific parameters
   if (surface->type == kGeometryType_Sphere) {
-    index = surface->sphere.index;
-    p = surface->ray->position +
-        surface->t * (surface->ray->direction);  // point of intersection
-    n = (p - spheres[index].position) / spheres[index].radius;  // normal
-    color_diffuse = spheres[index].color_diffuse;
-    color_specular = spheres[index].color_specular;
-    shininess = spheres[index].shininess;
+    const auto &sph = spheres[surface->sphere.index];
+
+    intersection_position =
+        surface->ray->position + surface->t * (surface->ray->direction);
+
+    normal = (intersection_position - sph.position) / sph.radius;
+
+    color_diffuse = sph.color_diffuse;
+    color_specular = sph.color_specular;
+    shininess = sph.shininess;
   } else if (surface->type == kGeometryType_Triangle) {
-    index = surface->triangle.index;
-    p = surface->ray->position + surface->t * (surface->ray->direction);
+    const auto &tri = triangles[surface->triangle.index];
+
+    intersection_position =
+        surface->ray->position + surface->t * (surface->ray->direction);
 
     float alpha = surface->triangle.alpha;
     float beta = surface->triangle.beta;
     float gamma = surface->triangle.gamma;
 
-    n = triangles[index].vertices[0].normal * alpha +
-        triangles[index].vertices[1].normal * beta +
-        triangles[index].vertices[2].normal * gamma;
-    n = glm::normalize(n);
+    normal = tri.vertices[0].normal * alpha + tri.vertices[1].normal * beta +
+             tri.vertices[2].normal * gamma;
+    normal = glm::normalize(normal);
 
-    color_diffuse = triangles[index].vertices[0].color_diffuse * alpha +
-                    triangles[index].vertices[1].color_diffuse * beta +
-                    triangles[index].vertices[2].color_diffuse * gamma;
+    color_diffuse = tri.vertices[0].color_diffuse * alpha +
+                    tri.vertices[1].color_diffuse * beta +
+                    tri.vertices[2].color_diffuse * gamma;
 
-    color_specular = triangles[index].vertices[0].color_specular * alpha +
-                     triangles[index].vertices[1].color_specular * beta +
-                     triangles[index].vertices[2].color_specular * gamma;
+    color_specular = tri.vertices[0].color_specular * alpha +
+                     tri.vertices[1].color_specular * beta +
+                     tri.vertices[2].color_specular * gamma;
 
-    shininess = triangles[index].vertices[0].shininess * alpha +
-                triangles[index].vertices[1].shininess * beta +
-                triangles[index].vertices[2].shininess * gamma;
+    shininess = tri.vertices[0].shininess * alpha +
+                tri.vertices[1].shininess * beta +
+                tri.vertices[2].shininess * gamma;
   }
 
-  // launch shadow rays for local phong color
+  // Launch shadow rays for local phong color.
   Ray shadow;
   Intersection occluder;
-  float toLight;
+  float to_light;
   glm::vec3 phong_color = ambient_light;
   float ln, rv;
   glm::vec3 reflection;
   for (uint l = 0; l < light_count; ++l) {
-    // launch main shadow ray
-    shadow.position = p;
-    shadow.direction = glm::normalize(lights[l].position - p);
+    // Launch main shadow ray.
+    shadow.position = intersection_position;
+    shadow.direction =
+        glm::normalize(lights[l].position - intersection_position);
 
     Intersect(&shadow, spheres, sphere_count, triangles, triangle_count,
               surface, &occluder);
 
-    toLight = glm::length(lights[l].position - shadow.position);
-    if (occluder.hit && occluder.t + kTolerance < toLight) {
+    to_light = glm::length(lights[l].position - shadow.position);
+    if (occluder.hit && occluder.t + kTolerance < to_light) {
       continue;
     }
 
-    ln = glm::clamp<float>(glm::dot(shadow.direction, n), 0, 1);
-    reflection = glm::normalize(2 * ln * n - shadow.direction);
+    ln = glm::clamp<float>(glm::dot(shadow.direction, normal), 0, 1);
+    reflection = glm::normalize(2 * ln * normal - shadow.direction);
     rv =
         glm::clamp<float>(glm::dot(reflection, -surface->ray->direction), 0, 1);
 
@@ -534,20 +538,21 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
 
     // launch extra shadow rays
     for (uint e = 0; e < config.extra_lights_per_light; ++e) {
-      shadow.position = p;
+      shadow.position = intersection_position;
       uint k = l * config.extra_lights_per_light + e;
-      shadow.direction = glm::normalize(extra_lights->positions[k] - p);
+      shadow.direction =
+          glm::normalize(extra_lights->positions[k] - intersection_position);
 
       Intersect(&shadow, spheres, sphere_count, triangles, triangle_count,
                 surface, &occluder);
 
-      toLight = glm::length(extra_lights->positions[k] - shadow.position);
-      if (occluder.hit && occluder.t + kTolerance < toLight) {
+      to_light = glm::length(extra_lights->positions[k] - shadow.position);
+      if (occluder.hit && occluder.t + kTolerance < to_light) {
         continue;
       }
 
-      ln = glm::clamp<float>(glm::dot(shadow.direction, n), 0, 1);
-      reflection = glm::normalize(2 * ln * n - shadow.direction);
+      ln = glm::clamp<float>(glm::dot(shadow.direction, normal), 0, 1);
+      reflection = glm::normalize(2 * ln * normal - shadow.direction);
       rv = glm::clamp<float>(glm::dot(reflection, -surface->ray->direction), 0,
                              1);
 
@@ -663,17 +668,18 @@ int main(int argc, char **argv) {
                      config.rays_per_pixel, &rays);
   }
 
-  for (uint i = 0; i < kImgArea; ++i) {
-    uint x = i % IMG_W;
-    uint y = i / IMG_W;
-    glm::vec3 total_color(0, 0, 0);
-    for (int j = 0; j < config.rays_per_pixel; ++j) {
-      total_color += TraceRay(&rays[i * config.rays_per_pixel + j], &scene,
-                              NULL, config.reflection_bounces, &extra_lights);
-    }
-    for (int j = 0; j < kRgbChannel__Count; ++j) {
-      buffer[y][x][j] =
-          glm::clamp<float>(total_color[j] / config.rays_per_pixel, 0, 1) * 255;
+  for (int y = 0; y < IMG_H; ++y) {
+    for (int x = 0; x < IMG_W; ++x) {
+      glm::vec3 color;
+      for (int i = 0; i < config.rays_per_pixel; ++i) {
+        uint j = (y * IMG_W + x) * config.rays_per_pixel + i;
+        color += TraceRay(&rays[j], &scene, NULL, config.reflection_bounces,
+                          &extra_lights);
+      }
+      for (int i = 0; i < kRgbChannel__Count; ++i) {
+        buffer[y][x][i] =
+            glm::clamp<float>(color[i] / config.rays_per_pixel, 0, 1) * 255;
+      }
     }
   }
 
