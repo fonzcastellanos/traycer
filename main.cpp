@@ -40,12 +40,11 @@ const char *kWindowName = "traycer";
 constexpr uint kImgArea = IMG_W * IMG_H;
 
 const float eps = 0.00000001;
-const glm::vec3 backgroundColor(1, 1, 1);
+const glm::vec3 background_color(1, 1, 1);
+const glm::vec3 camera_position(0, 0, 0);
 
 static Config config;
 static RenderTarget render_target = kRenderTarget_Window;
-
-const glm::vec3 camera_position(0, 0, 0);
 
 uchar buffer[IMG_H][IMG_W][3];
 
@@ -131,8 +130,9 @@ void Idle() {
   once = 1;
 }
 
-static void ProjPlaneCorners(uint w, uint h, float fov, float z, glm::vec3 *tr,
-                             glm::vec3 *tl, glm::vec3 *br, glm::vec3 *bl) {
+static void ProjectionPlaneCorners(uint w, uint h, float fov, float z,
+                                   glm::vec3 *tr, glm::vec3 *tl, glm::vec3 *br,
+                                   glm::vec3 *bl) {
 #ifndef NDEBUG
   constexpr float kTolerance = 0.00001;
 #endif
@@ -145,7 +145,7 @@ static void ProjPlaneCorners(uint w, uint h, float fov, float z, glm::vec3 *tr,
   assert(fov > kTolerance);
 
   float aspect = (float)w / h;
-  float tan_half_fov = glm::tan(fov * (1.0f / 2) * (float)PI * (1.0f / 180));
+  float tan_half_fov = glm::tan(fov * 0.5f * (float)PI * (1.0f / 180));
 
   *tr = glm::vec3(aspect * tan_half_fov, tan_half_fov, z);
   *tl = glm::vec3(-aspect * tan_half_fov, tan_half_fov, z);
@@ -153,24 +153,24 @@ static void ProjPlaneCorners(uint w, uint h, float fov, float z, glm::vec3 *tr,
   *bl = glm::vec3(-aspect * tan_half_fov, -tan_half_fov, z);
 }
 
-static void MakeDefaultRays(const glm::vec3 *camera_pos, uint w, uint h,
+static void MakeDefaultRays(const glm::vec3 *camera_position, uint w, uint h,
                             float fov, float focal_len,
                             std::vector<Ray> *rays) {
 #ifndef NDEBUG
   constexpr float kTolerance = 0.00001;
 #endif
 
-  assert(camera_pos);
+  assert(camera_position);
   assert(fov + kTolerance > 0);
   assert(focal_len + kTolerance > 0);
   assert(rays);
 
-  float proj_plane_z = -focal_len;
+  float projection_plane_z = -focal_len;
   glm::vec3 tr;
   glm::vec3 tl;
   glm::vec3 br;
   glm::vec3 bl;
-  ProjPlaneCorners(w, h, fov, proj_plane_z, &tr, &tl, &br, &bl);
+  ProjectionPlaneCorners(w, h, fov, projection_plane_z, &tr, &tl, &br, &bl);
 
   uint pixel_count = w * h;
 
@@ -180,33 +180,34 @@ static void MakeDefaultRays(const glm::vec3 *camera_pos, uint w, uint h,
 
   float pix_w = (tr.x - tl.x) / w;
   float pix_h = (tr.y - br.y) / h;
+
   uint i = 0;
-  for (float y = br.y + pix_h * (1.0f / 2); y < tr.y; y += pix_h) {
-    for (float x = tl.x + pix_w * (1.0f / 2); x < tr.x; x += pix_w) {
-      rays_[i].position = glm::vec3(x, y, proj_plane_z);
-      rays_[i].direction = glm::normalize(rays_[i].position - *camera_pos);
+  for (float y = br.y + pix_h * 0.5f; y < tr.y; y += pix_h) {
+    for (float x = tl.x + pix_w * 0.5f; x < tr.x; x += pix_w) {
+      rays_[i].position = glm::vec3(x, y, projection_plane_z);
+      rays_[i].direction = glm::normalize(rays_[i].position - *camera_position);
       ++i;
     }
   }
 }
 
-static void MakeJitteredRays(const glm::vec3 *camera_pos, uint w, uint h,
+static void MakeJitteredRays(const glm::vec3 *camera_position, uint w, uint h,
                              float fov, float focal_len, uint rays_per_pixel,
                              std::vector<Ray> *rays) {
   constexpr float kTolerance = 0.00001;
 
-  assert(camera_pos);
+  assert(camera_position);
   assert(fov + kTolerance > 0);
   assert(focal_len + kTolerance > 0);
   assert(rays_per_pixel > 0);
   assert(rays);
 
-  float proj_plane_z = -focal_len;
+  float projection_plane_z = -focal_len;
   glm::vec3 tr;
   glm::vec3 tl;
   glm::vec3 br;
   glm::vec3 bl;
-  ProjPlaneCorners(w, h, fov, proj_plane_z, &tr, &tl, &br, &bl);
+  ProjectionPlaneCorners(w, h, fov, projection_plane_z, &tr, &tl, &br, &bl);
 
   uint pixel_count = w * h;
 
@@ -226,9 +227,13 @@ static void MakeJitteredRays(const glm::vec3 *camera_pos, uint w, uint h,
       for (uint j = 0; j < rays_per_pixel; ++j) {
         float x_offset = pix_w * distrib(re);
         float y_offset = pix_h * distrib(re);
+
         uint k = i * rays_per_pixel + j;
-        rays_[k].position = glm::vec3(x + x_offset, y + y_offset, proj_plane_z);
-        rays_[k].direction = glm::normalize(rays_[k].position - *camera_pos);
+
+        rays_[k].position =
+            glm::vec3(x + x_offset, y + y_offset, projection_plane_z);
+        rays_[k].direction =
+            glm::normalize(rays_[k].position - *camera_position);
       }
       ++i;
     }
@@ -258,8 +263,8 @@ static void GetReflectedRay(Ray *ray, Sphere *spheres, Triangle *triangles,
         triangles[tri].v[2].normal * gamma;
     n = glm::normalize(n);
   }
-  float vn = glm::clamp<float>(glm::dot(-ray->direction, n), 0.0, 1.0);
-  reflected_ray->direction = glm::normalize(2.0f * vn * n + ray->direction);
+  float vn = glm::clamp<float>(glm::dot(-ray->direction, n), 0, 1);
+  reflected_ray->direction = glm::normalize(2 * vn * n + ray->direction);
   reflected_ray->position = p;
 }
 
@@ -281,7 +286,6 @@ static void IntersectSphere(Ray *ray, Sphere *spheres, uint sphere_idx,
             glm::pow(center_to_ray.z, 2) -
             glm::pow(spheres[sphere_idx].radius, 2);
 
-  // Calculate discriminant
   float discriminant = glm::pow(b, 2) - 4 * c;
 
   // Calculate roots and determine t
@@ -289,9 +293,9 @@ static void IntersectSphere(Ray *ray, Sphere *spheres, uint sphere_idx,
   if (discriminant < -eps) {  // misses sphere
     return;
   } else if (glm::abs(discriminant) < eps) {  // hits sphere at one point
-    t = -b * (1.0f / 2);
+    t = -b * 0.5f;
   } else {  // hits sphere at two points
-    float q = (-1.0f / 2) * (b + glm::sign(b) * glm::sqrt(discriminant));
+    float q = -0.5f * (b + glm::sign(b) * glm::sqrt(discriminant));
     float root1 = c / q;
     float root2 = q;
     t = glm::min(root1, root2);
@@ -320,18 +324,18 @@ static void IntersectTriangle(Ray *ray, Triangle *triangles, int triangle_idx,
   glm::vec3 edge01 = v[1].position - v[0].position;
   glm::vec3 edge02 = v[2].position - v[0].position;
   glm::vec3 n = glm::cross(edge01, edge02);
-  float twiceTriArea = glm::length(n);
+  float twice_tri_area = glm::length(n);
   n = glm::normalize(n);
 
   // Check if plane is parallel to ray
-  float nDotRay = glm::dot(n, ray->direction);
-  if (glm::abs(nDotRay) < eps) {
+  float n_dot_ray = glm::dot(n, ray->direction);
+  if (glm::abs(n_dot_ray) < eps) {
     return;
   }
 
   // Check for intersection behind ray origin
   float d = -glm::dot(n, v[0].position);
-  float t = -(glm::dot(n, ray->position) + d) / nDotRay;
+  float t = -(glm::dot(n, ray->position) + d) / n_dot_ray;
   if (t < eps) {
     return;
   }
@@ -347,7 +351,7 @@ static void IntersectTriangle(Ray *ray, Triangle *triangles, int triangle_idx,
     return;
   }
 
-  float gamma = glm::length(np) / twiceTriArea;
+  float gamma = glm::length(np) / twice_tri_area;
 
   glm::vec3 edge12 = v[2].position - v[1].position;
   glm::vec3 edge1p = p - v[1].position;
@@ -356,7 +360,7 @@ static void IntersectTriangle(Ray *ray, Triangle *triangles, int triangle_idx,
     return;
   }
 
-  float alpha = glm::length(np) / twiceTriArea;
+  float alpha = glm::length(np) / twice_tri_area;
 
   glm::vec3 edge20 = v[0].position - v[2].position;
   glm::vec3 edge2p = p - v[2].position;
@@ -365,7 +369,7 @@ static void IntersectTriangle(Ray *ray, Triangle *triangles, int triangle_idx,
     return;
   }
 
-  float beta = glm::length(np) / twiceTriArea;
+  float beta = glm::length(np) / twice_tri_area;
 
   out->triangle_data.alpha = alpha;
   out->triangle_data.beta = beta;
@@ -433,9 +437,9 @@ static void Intersect(Ray *ray, Sphere *spheres, uint sphere_count,
   }
 }
 
-static float GetPhongColor(float lightColor, float diffuse, float specular,
+static float GetPhongColor(float light_color, float diffuse, float specular,
                            float ln, float rv, float shininess) {
-  return lightColor * (diffuse * ln + specular * glm::pow(rv, shininess));
+  return light_color * (diffuse * ln + specular * glm::pow(rv, shininess));
 }
 
 static glm::vec3 Shade(Intersection *surface, Sphere *spheres,
@@ -451,7 +455,7 @@ static glm::vec3 TraceRay(Ray *ray, Sphere *spheres, uint sphere_count,
   Intersect(ray, spheres, sphere_count, triangles, triangle_count, prev,
             &closest);
   if (!closest.hit) {
-    return backgroundColor;
+    return background_color;
   } else {
     return Shade(&closest, spheres, sphere_count, triangles, triangle_count,
                  lights, light_count, bounces, extra_lights);
@@ -513,7 +517,7 @@ static glm::vec3 Shade(Intersection *surface, Sphere *spheres,
   Ray shadow;
   Intersection occluder;
   float toLight;
-  glm::vec3 phongColor = ambient_light;
+  glm::vec3 phong_color = ambient_light;
   float ln, rv;
   glm::vec3 reflection;
   for (uint l = 0; l < light_count; ++l) {
@@ -529,13 +533,13 @@ static glm::vec3 Shade(Intersection *surface, Sphere *spheres,
       continue;
     }
 
-    ln = glm::clamp<float>(glm::dot(shadow.direction, n), 0.0, 1.0);
-    reflection = glm::normalize(2.0f * ln * n - shadow.direction);
-    rv = glm::clamp<float>(glm::dot(reflection, -surface->ray->direction), 0.0,
-                           1.0);
+    ln = glm::clamp<float>(glm::dot(shadow.direction, n), 0, 1);
+    reflection = glm::normalize(2 * ln * n - shadow.direction);
+    rv =
+        glm::clamp<float>(glm::dot(reflection, -surface->ray->direction), 0, 1);
 
     for (int c = 0; c < 3; ++c) {
-      phongColor[c] += GetPhongColor(
+      phong_color[c] += GetPhongColor(
           lights[l].color[c] / (config.extra_lights_per_light + 1),
           color_diffuse[c], color_specular[c], ln, rv, shininess);
     }
@@ -554,13 +558,13 @@ static glm::vec3 Shade(Intersection *surface, Sphere *spheres,
         continue;
       }
 
-      ln = glm::clamp<float>(glm::dot(shadow.direction, n), 0.0, 1.0);
-      reflection = glm::normalize(2.0f * ln * n - shadow.direction);
-      rv = glm::clamp<float>(glm::dot(reflection, -surface->ray->direction),
-                             0.0, 1.0);
+      ln = glm::clamp<float>(glm::dot(shadow.direction, n), 0, 1);
+      reflection = glm::normalize(2 * ln * n - shadow.direction);
+      rv = glm::clamp<float>(glm::dot(reflection, -surface->ray->direction), 0,
+                             1);
 
       for (int c = 0; c < 3; ++c) {
-        phongColor[c] += GetPhongColor(
+        phong_color[c] += GetPhongColor(
             lights[l].color[c] / (config.extra_lights_per_light + 1),
             color_diffuse[c], color_specular[c], ln, rv, shininess);
       }
@@ -569,18 +573,18 @@ static glm::vec3 Shade(Intersection *surface, Sphere *spheres,
 
   // launch reflected rays
   if (bounces > 0) {
-    Ray reflectedRay;
-    GetReflectedRay(surface->ray, spheres, triangles, surface, &reflectedRay);
-    glm::vec3 reflectedColor = TraceRay(
-        &reflectedRay, spheres, sphere_count, triangles, triangle_count, lights,
-        light_count, surface, bounces - 1, extra_lights);
-    for (int c = 0; c < 3; ++c) {
-      phongColor[c] *= (1 - color_specular[c]);
-      phongColor[c] += color_specular[c] * reflectedColor[c];
+    Ray ray;
+    GetReflectedRay(surface->ray, spheres, triangles, surface, &ray);
+    glm::vec3 color =
+        TraceRay(&ray, spheres, sphere_count, triangles, triangle_count, lights,
+                 light_count, surface, bounces - 1, extra_lights);
+    for (int i = 0; i < kRgbChannel__Count; ++i) {
+      phong_color[i] *= (1 - color_specular[i]);
+      phong_color[i] += color_specular[i] * color[i];
     }
   }
 
-  return phongColor;
+  return phong_color;
 }
 
 static Status ParseConfig(uint argc, char *argv[], Config *c) {
