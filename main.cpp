@@ -39,7 +39,8 @@ const char *kWindowName = "traycer";
 
 constexpr uint kImgArea = IMG_W * IMG_H;
 
-const float eps = 0.00000001;
+constexpr float kTolerance = 0.000001;
+
 const glm::vec3 background_color(1, 1, 1);
 const glm::vec3 camera_position(0, 0, 0);
 
@@ -156,10 +157,6 @@ static void ProjectionPlaneCorners(uint w, uint h, float fov, float z,
 static void MakeDefaultRays(const glm::vec3 *camera_position, uint w, uint h,
                             float fov, float focal_len,
                             std::vector<Ray> *rays) {
-#ifndef NDEBUG
-  constexpr float kTolerance = 0.00001;
-#endif
-
   assert(camera_position);
   assert(fov + kTolerance > 0);
   assert(focal_len + kTolerance > 0);
@@ -194,8 +191,6 @@ static void MakeDefaultRays(const glm::vec3 *camera_position, uint w, uint h,
 static void MakeJitteredRays(const glm::vec3 *camera_position, uint w, uint h,
                              float fov, float focal_len, uint rays_per_pixel,
                              std::vector<Ray> *rays) {
-  constexpr float kTolerance = 0.00001;
-
   assert(camera_position);
   assert(fov + kTolerance > 0);
   assert(focal_len + kTolerance > 0);
@@ -270,8 +265,6 @@ static void GetReflectedRay(Ray *ray, const Sphere *spheres,
 }
 
 static float IntersectSphere(Ray *ray, const Sphere *sph) {
-  constexpr float kTolerance = 0.000001;
-
   assert(ray);
   assert(sph);
 
@@ -305,93 +298,84 @@ static float IntersectSphere(Ray *ray, const Sphere *sph) {
   return t;
 }
 
-static void IntersectTriangle(Ray *ray, const Triangle *triangles,
-                              int triangle_idx, Intersection *out) {
+static float IntersectTriangle(Ray *ray, const Triangle *tri, float *alpha,
+                               float *beta, float *gamma) {
   assert(ray);
-  assert(out);
+  assert(tri);
+  assert(alpha);
+  assert(beta);
+  assert(gamma);
 
-  out->type = kGeometryType_Triangle;
-  out->triangle.index = triangle_idx;
-  out->ray = ray;
-  out->hit = false;
+  const auto &v = tri->v;
 
-  // Alias for vertices
-  const Vertex(&v)[3] = triangles[triangle_idx].v;
-
-  // Calculate triangle normal
+  // Calculate triangle normal.
   glm::vec3 edge01 = v[1].position - v[0].position;
   glm::vec3 edge02 = v[2].position - v[0].position;
   glm::vec3 n = glm::cross(edge01, edge02);
   float twice_tri_area = glm::length(n);
   n = glm::normalize(n);
 
-  // Check if plane is parallel to ray
+  // Check if plane is parallel to ray.
   float n_dot_ray = glm::dot(n, ray->direction);
-  if (glm::abs(n_dot_ray) < eps) {
-    return;
+  if (glm::abs(n_dot_ray) < kTolerance) {
+    return 0;
   }
 
-  // Check for intersection behind ray origin
+  // Check for intersection behind ray origin.
   float d = -glm::dot(n, v[0].position);
   float t = -(glm::dot(n, ray->position) + d) / n_dot_ray;
-  if (t < eps) {
-    return;
+  if (t < kTolerance) {
+    return 0;
   }
 
   glm::vec3 p = ray->position + t * ray->direction;
 
-  glm::vec3 np;  // vector perpendicular to subtriangle
+  // Perpendicular to subtriangle.
+  glm::vec3 np;
 
-  // Inside-outside test
   glm::vec3 edge0p = p - v[0].position;
   np = glm::cross(edge01, edge0p);
-  if (glm::dot(n, np) < -eps) {
-    return;
+  // Inside-outside test.
+  if (glm::dot(n, np) < -kTolerance) {
+    return 0;
   }
 
-  float gamma = glm::length(np) / twice_tri_area;
+  float gamma_ = glm::length(np) / twice_tri_area;
 
   glm::vec3 edge12 = v[2].position - v[1].position;
   glm::vec3 edge1p = p - v[1].position;
   np = glm::cross(edge12, edge1p);
-  if (glm::dot(n, np) < -eps) {
-    return;
+  if (glm::dot(n, np) < -kTolerance) {
+    return 0;
   }
 
-  float alpha = glm::length(np) / twice_tri_area;
+  float alpha_ = glm::length(np) / twice_tri_area;
 
   glm::vec3 edge20 = v[0].position - v[2].position;
   glm::vec3 edge2p = p - v[2].position;
   np = glm::cross(edge20, edge2p);
-  if (glm::dot(n, np) < -eps) {
-    return;
+  if (glm::dot(n, np) < -kTolerance) {
+    return 0;
   }
 
-  float beta = glm::length(np) / twice_tri_area;
+  *alpha = alpha_;
+  *gamma = gamma_;
+  *beta = glm::length(np) / twice_tri_area;
 
-  out->triangle.alpha = alpha;
-  out->triangle.beta = beta;
-  out->triangle.gamma = gamma;
-  out->t = t;
-  out->hit = true;
+  return t;
 }
 
 static void Intersect(Ray *ray, const Sphere *spheres, uint sphere_count,
                       const Triangle *triangles, uint triangle_count,
                       Intersection *prev, Intersection *out) {
-  constexpr float kTolerance = 0.000001;
-
   assert(ray);
   assert(spheres);
   assert(triangles);
-  assert(prev);
   assert(out);
 
   out->ray = ray;
-  out->t = std::numeric_limits<float>::max();
+  out->t = std::numeric_limits<float>::max() - kTolerance;
   out->hit = false;
-
-  Intersection current;
 
   // Spheres
   for (uint i = 0; i < sphere_count; ++i) {
@@ -401,16 +385,15 @@ static void Intersect(Ray *ray, const Sphere *spheres, uint sphere_count,
     }
 
     float t = IntersectSphere(ray, &spheres[i]);
+
     int hit = t > kTolerance;
     int further = t > out->t + kTolerance;
-
     if (!hit || further) {
       continue;
     }
 
     out->type = kGeometryType_Sphere;
     out->sphere.index = i;
-    out->ray = ray;
     out->t = t;
     out->hit = hit;
   }
@@ -422,20 +405,24 @@ static void Intersect(Ray *ray, const Sphere *spheres, uint sphere_count,
       continue;
     }
 
-    IntersectTriangle(ray, triangles, i, &current);
+    float alpha;
+    float beta;
+    float gamma;
+    float t = IntersectTriangle(ray, &triangles[i], &alpha, &beta, &gamma);
 
-    if (!current.hit || current.t > out->t + eps) {
+    int hit = t > kTolerance;
+    int further = t > out->t + kTolerance;
+    if (!hit || further) {
       continue;
     }
 
-    out->type = current.type;
-    out->triangle.index = current.triangle.index;
-    out->triangle.alpha = current.triangle.alpha;
-    out->triangle.beta = current.triangle.beta;
-    out->triangle.gamma = current.triangle.gamma;
-    out->ray = current.ray;
-    out->t = current.t;
-    out->hit = current.hit;
+    out->type = kGeometryType_Triangle;
+    out->triangle.index = i;
+    out->triangle.alpha = alpha;
+    out->triangle.beta = beta;
+    out->triangle.gamma = gamma;
+    out->t = t;
+    out->hit = hit;
   }
 }
 
@@ -533,7 +520,7 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
               surface, &occluder);
 
     toLight = glm::length(lights[l].position - shadow.position);
-    if (occluder.hit && occluder.t + eps < toLight) {
+    if (occluder.hit && occluder.t + kTolerance < toLight) {
       continue;
     }
 
@@ -558,7 +545,7 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
                 surface, &occluder);
 
       toLight = glm::length(extra_lights->positions[k] - shadow.position);
-      if (occluder.hit && occluder.t + eps < toLight) {
+      if (occluder.hit && occluder.t + kTolerance < toLight) {
         continue;
       }
 
