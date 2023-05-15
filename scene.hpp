@@ -27,7 +27,7 @@ struct Vertex {
 };
 
 struct Triangle {
-  Vertex v[3];
+  Vertex vertices[3];
 };
 
 struct Light {

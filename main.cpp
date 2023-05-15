@@ -134,10 +134,6 @@ void Idle() {
 static void ProjectionPlaneCorners(uint w, uint h, float fov, float z,
                                    glm::vec3 *tr, glm::vec3 *tl, glm::vec3 *br,
                                    glm::vec3 *bl) {
-#ifndef NDEBUG
-  constexpr float kTolerance = 0.00001;
-#endif
-
   assert(tr);
   assert(tl);
   assert(br);
@@ -255,8 +251,9 @@ static void GetReflectedRay(Ray *ray, const Sphere *spheres,
     float beta = in->triangle.beta;
     float gamma = in->triangle.gamma;
 
-    n = triangles[tri].v[0].normal * alpha + triangles[tri].v[1].normal * beta +
-        triangles[tri].v[2].normal * gamma;
+    n = triangles[tri].vertices[0].normal * alpha +
+        triangles[tri].vertices[1].normal * beta +
+        triangles[tri].vertices[2].normal * gamma;
     n = glm::normalize(n);
   }
   float vn = glm::clamp<float>(glm::dot(-ray->direction, n), 0, 1);
@@ -306,11 +303,11 @@ static float IntersectTriangle(Ray *ray, const Triangle *tri, float *alpha,
   assert(beta);
   assert(gamma);
 
-  const auto &v = tri->v;
+  const auto &verts = tri->vertices;
 
   // Calculate triangle normal.
-  glm::vec3 edge01 = v[1].position - v[0].position;
-  glm::vec3 edge02 = v[2].position - v[0].position;
+  glm::vec3 edge01 = verts[1].position - verts[0].position;
+  glm::vec3 edge02 = verts[2].position - verts[0].position;
   glm::vec3 n = glm::cross(edge01, edge02);
   float twice_tri_area = glm::length(n);
   n = glm::normalize(n);
@@ -322,7 +319,7 @@ static float IntersectTriangle(Ray *ray, const Triangle *tri, float *alpha,
   }
 
   // Check for intersection behind ray origin.
-  float d = -glm::dot(n, v[0].position);
+  float d = -glm::dot(n, verts[0].position);
   float t = -(glm::dot(n, ray->position) + d) / n_dot_ray;
   if (t < kTolerance) {
     return 0;
@@ -333,7 +330,7 @@ static float IntersectTriangle(Ray *ray, const Triangle *tri, float *alpha,
   // Perpendicular to subtriangle.
   glm::vec3 np;
 
-  glm::vec3 edge0p = p - v[0].position;
+  glm::vec3 edge0p = p - verts[0].position;
   np = glm::cross(edge01, edge0p);
   // Inside-outside test.
   if (glm::dot(n, np) < -kTolerance) {
@@ -342,8 +339,8 @@ static float IntersectTriangle(Ray *ray, const Triangle *tri, float *alpha,
 
   float gamma_ = glm::length(np) / twice_tri_area;
 
-  glm::vec3 edge12 = v[2].position - v[1].position;
-  glm::vec3 edge1p = p - v[1].position;
+  glm::vec3 edge12 = verts[2].position - verts[1].position;
+  glm::vec3 edge1p = p - verts[1].position;
   np = glm::cross(edge12, edge1p);
   if (glm::dot(n, np) < -kTolerance) {
     return 0;
@@ -351,8 +348,8 @@ static float IntersectTriangle(Ray *ray, const Triangle *tri, float *alpha,
 
   float alpha_ = glm::length(np) / twice_tri_area;
 
-  glm::vec3 edge20 = v[0].position - v[2].position;
-  glm::vec3 edge2p = p - v[2].position;
+  glm::vec3 edge20 = verts[0].position - verts[2].position;
+  glm::vec3 edge2p = p - verts[2].position;
   np = glm::cross(edge20, edge2p);
   if (glm::dot(n, np) < -kTolerance) {
     return 0;
@@ -486,22 +483,22 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
     float beta = surface->triangle.beta;
     float gamma = surface->triangle.gamma;
 
-    n = triangles[index].v[0].normal * alpha +
-        triangles[index].v[1].normal * beta +
-        triangles[index].v[2].normal * gamma;
+    n = triangles[index].vertices[0].normal * alpha +
+        triangles[index].vertices[1].normal * beta +
+        triangles[index].vertices[2].normal * gamma;
     n = glm::normalize(n);
 
-    color_diffuse = triangles[index].v[0].color_diffuse * alpha +
-                    triangles[index].v[1].color_diffuse * beta +
-                    triangles[index].v[2].color_diffuse * gamma;
+    color_diffuse = triangles[index].vertices[0].color_diffuse * alpha +
+                    triangles[index].vertices[1].color_diffuse * beta +
+                    triangles[index].vertices[2].color_diffuse * gamma;
 
-    color_specular = triangles[index].v[0].color_specular * alpha +
-                     triangles[index].v[1].color_specular * beta +
-                     triangles[index].v[2].color_specular * gamma;
+    color_specular = triangles[index].vertices[0].color_specular * alpha +
+                     triangles[index].vertices[1].color_specular * beta +
+                     triangles[index].vertices[2].color_specular * gamma;
 
-    shininess = triangles[index].v[0].shininess * alpha +
-                triangles[index].v[1].shininess * beta +
-                triangles[index].v[2].shininess * gamma;
+    shininess = triangles[index].vertices[0].shininess * alpha +
+                triangles[index].vertices[1].shininess * beta +
+                triangles[index].vertices[2].shininess * gamma;
   }
 
   // launch shadow rays for local phong color
@@ -618,12 +615,7 @@ int main(int argc, char **argv) {
     render_target = kRenderTarget_Jpeg;
   }
 
-  // std::vector<Sphere> spheres;
-  // std::vector<Triangle> triangles;
-  // std::vector<Light> lights;
-
   Scene scene;
-
   st = LoadScene(config.scene_filepath, &ambient_light, &scene);
   if (st != kStatus_Ok) {
     std::fprintf(stderr, "Failed to load scene.\n");

@@ -113,7 +113,7 @@ Status ParseTriangle(std::FILE *f, Triangle *t) {
   assert(t);
 
   for (uint i = 0; i < 3; ++i) {
-    Status st = ParseVertex(f, &t->v[i]);
+    Status st = ParseVertex(f, &t->vertices[i]);
     if (st != kStatus_Ok) {
       std::fprintf(stderr, "Failed to parse vertex.\n");
       return st;
