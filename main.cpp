@@ -269,35 +269,30 @@ static void GetReflectedRay(Ray *ray, const Sphere *spheres,
   reflected_ray->position = p;
 }
 
-static void IntersectSphere(Ray *ray, const Sphere *spheres, uint sphere_idx,
-                            Intersection *out) {
+static float IntersectSphere(Ray *ray, const Sphere *sph) {
   constexpr float kTolerance = 0.000001;
 
   assert(ray);
-  assert(spheres);
-  assert(out);
-
-  out->type = kGeometryType_Sphere;
-  out->sphere.index = sphere_idx;
-  out->ray = ray;
-  out->hit = false;
+  assert(sph);
 
   // Calculate quadratic coefficients.
-  glm::vec3 sph_to_ray = ray->position - spheres[sphere_idx].position;
+  glm::vec3 sph_to_ray = ray->position - sph->position;
   float b = 2 * glm::dot(ray->direction, sph_to_ray);
   float c = sph_to_ray.x * sph_to_ray.x + sph_to_ray.y * sph_to_ray.y +
-            sph_to_ray.z * sph_to_ray.z -
-            spheres[sphere_idx].radius * spheres[sphere_idx].radius;
+            sph_to_ray.z * sph_to_ray.z - sph->radius * sph->radius;
 
   float discriminant = b * b - 4 * c;
 
-  // Calculate roots and determine t.
   float t;
-  if (discriminant < -kTolerance) {  // Misses sphere.
-    return;
-  } else if (discriminant < kTolerance) {  // Hits sphere at one point.
+  if (discriminant < -kTolerance) {
+    // Misses sphere.
+    t = 0;
+  } else if (discriminant < kTolerance) {
+    // Hits sphere at one point.
     t = -b * 0.5f;
-  } else {  // Hits sphere at two points.
+  } else {
+    // Hits sphere at two points.
+
     // Implemented this way to improve stability of calculation. Addresses the
     // issue of when b and the root of the discriminant don't have the same sign
     // but the values are very close to each other.
@@ -307,10 +302,7 @@ static void IntersectSphere(Ray *ray, const Sphere *spheres, uint sphere_idx,
     t = glm::min(root1, root2);
   }
 
-  if (t > eps) {  // Hit because ahead of origin.
-    out->t = t;
-    out->hit = true;
-  }
+  return t;
 }
 
 static void IntersectTriangle(Ray *ray, const Triangle *triangles,
@@ -387,6 +379,8 @@ static void IntersectTriangle(Ray *ray, const Triangle *triangles,
 static void Intersect(Ray *ray, const Sphere *spheres, uint sphere_count,
                       const Triangle *triangles, uint triangle_count,
                       Intersection *prev, Intersection *out) {
+  constexpr float kTolerance = 0.000001;
+
   assert(ray);
   assert(spheres);
   assert(triangles);
@@ -406,17 +400,19 @@ static void Intersect(Ray *ray, const Sphere *spheres, uint sphere_count,
       continue;
     }
 
-    IntersectSphere(ray, spheres, i, &current);
+    float t = IntersectSphere(ray, &spheres[i]);
+    int hit = t > kTolerance;
+    int further = t > out->t + kTolerance;
 
-    if (!current.hit || current.t > out->t + eps) {
+    if (!hit || further) {
       continue;
     }
 
-    out->type = current.type;
-    out->sphere.index = current.sphere.index;
-    out->ray = current.ray;
-    out->t = current.t;
-    out->hit = current.hit;
+    out->type = kGeometryType_Sphere;
+    out->sphere.index = i;
+    out->ray = ray;
+    out->t = t;
+    out->hit = hit;
   }
 
   // Triangles
