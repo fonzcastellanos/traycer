@@ -52,7 +52,6 @@ struct Intersection {
   };
   Ray *ray;
   float t;
-  bool hit;
 };
 
 enum SamplingMode { kSamplingMode_Default, kSamplingMode_Jitter };

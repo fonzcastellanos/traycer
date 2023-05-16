@@ -41,8 +41,8 @@ constexpr float kTolerance = 0.000001;
 constexpr float kShadowRayBias = kTolerance;
 constexpr float kReflectionRayBias = kTolerance;
 
-const glm::vec3 background_color(1, 1, 1);
-const glm::vec3 camera_position(0, 0, 0);
+const glm::vec3 kBackgroundColor(1, 1, 1);
+const glm::vec3 kCameraPosition(0, 0, 0);
 
 static Config config;
 static RenderTarget render_target = kRenderTarget_Window;
@@ -330,9 +330,9 @@ static float IntersectTriangle(Ray *ray, const Triangle *tri, float *alpha,
   return t;
 }
 
-static void Intersect(Ray *ray, const Sphere *spheres, uint sphere_count,
-                      const Triangle *triangles, uint triangle_count,
-                      Intersection *intersection) {
+static int Intersect(Ray *ray, const Sphere *spheres, uint sphere_count,
+                     const Triangle *triangles, uint triangle_count,
+                     Intersection *intersection) {
   assert(ray);
   assert(spheres);
   assert(triangles);
@@ -340,7 +340,8 @@ static void Intersect(Ray *ray, const Sphere *spheres, uint sphere_count,
 
   intersection->ray = ray;
   intersection->t = std::numeric_limits<float>::max() - kTolerance;
-  intersection->hit = false;
+
+  int found_intersection = 0;
 
   // Spheres
   for (uint i = 0; i < sphere_count; ++i) {
@@ -355,7 +356,7 @@ static void Intersect(Ray *ray, const Sphere *spheres, uint sphere_count,
     intersection->type = kGeometryType_Sphere;
     intersection->sphere.index = i;
     intersection->t = t;
-    intersection->hit = hit;
+    found_intersection = 1;
   }
 
   // Triangles
@@ -377,13 +378,19 @@ static void Intersect(Ray *ray, const Sphere *spheres, uint sphere_count,
     intersection->triangle.beta = beta;
     intersection->triangle.gamma = gamma;
     intersection->t = t;
-    intersection->hit = hit;
+    found_intersection = 1;
   }
+
+  return found_intersection;
 }
 
-static float GetPhongColor(float light_color, float diffuse, float specular,
-                           float ln, float rv, float shininess) {
-  return light_color * (diffuse * ln + specular * glm::pow(rv, shininess));
+static glm::vec3 PhongColor(glm::vec3 light_color, glm::vec3 diffuse_color,
+                            glm::vec3 specular_color, float l_dot_n,
+                            float r_dot_v, float shininess) {
+  glm::vec3 result =
+      light_color * ((diffuse_color * l_dot_n) +
+                     (specular_color * glm::pow(r_dot_v, shininess)));
+  return result;
 }
 
 static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
@@ -395,10 +402,11 @@ static glm::vec3 TraceRay(Ray *ray, const Scene *scene, int bounces,
   assert(scene);
 
   Intersection intersection;
-  Intersect(ray, scene->spheres, scene->sphere_count, scene->triangles,
-            scene->triangle_count, &intersection);
-  if (!intersection.hit) {
-    return background_color;
+  int found_intersection =
+      Intersect(ray, scene->spheres, scene->sphere_count, scene->triangles,
+                scene->triangle_count, &intersection);
+  if (!found_intersection) {
+    return kBackgroundColor;
   } else {
     return Shade(&intersection, scene, bounces, extra_lights);
   }
@@ -458,61 +466,71 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
   }
 
   // Launch shadow rays for local phong color.
-  Ray shadow;
   Intersection occluder;
-  float to_light;
   glm::vec3 phong_color = ambient_light;
-  float ln, rv;
+  float l_dot_n;
+  float r_dot_v;
   glm::vec3 reflection;
   for (uint l = 0; l < light_count; ++l) {
     // Launch main shadow ray.
-    shadow.position = intersection_position + kShadowRayBias * normal;
-    shadow.direction = glm::normalize(lights[l].position - shadow.position);
+    Ray main_shadow_ray;
+    main_shadow_ray.position = intersection_position + kShadowRayBias * normal;
 
-    Intersect(&shadow, spheres, sphere_count, triangles, triangle_count,
-              &occluder);
+    glm::vec3 shadow_to_light = lights[l].position - main_shadow_ray.position;
+    float shadow_to_light_dist = glm::length(shadow_to_light);
 
-    to_light = glm::length(lights[l].position - shadow.position);
-    if (occluder.hit && occluder.t + kTolerance < to_light) {
+    main_shadow_ray.direction = shadow_to_light / shadow_to_light_dist;
+
+    int intersected = Intersect(&main_shadow_ray, spheres, sphere_count,
+                                triangles, triangle_count, &occluder);
+
+    int occluded =
+        intersected && occluder.t + kTolerance < shadow_to_light_dist;
+    if (occluded) {
       continue;
     }
 
-    ln = glm::clamp<float>(glm::dot(shadow.direction, normal), 0, 1);
-    reflection = glm::normalize(2 * ln * normal - shadow.direction);
-    rv =
+    l_dot_n =
+        glm::clamp<float>(glm::dot(main_shadow_ray.direction, normal), 0, 1);
+    reflection =
+        glm::normalize(2 * l_dot_n * normal - main_shadow_ray.direction);
+    r_dot_v =
         glm::clamp<float>(glm::dot(reflection, -surface->ray->direction), 0, 1);
 
-    for (int c = 0; c < kRgbChannel__Count; ++c) {
-      phong_color[c] += GetPhongColor(
-          lights[l].color[c] / (config.extra_lights_per_light + 1),
-          color_diffuse[c], color_specular[c], ln, rv, shininess);
-    }
+    phong_color +=
+        PhongColor(lights[l].color / (float)(config.extra_lights_per_light + 1),
+                   color_diffuse, color_specular, l_dot_n, r_dot_v, shininess);
 
     // launch extra shadow rays
     for (uint e = 0; e < config.extra_lights_per_light; ++e) {
-      shadow.position = intersection_position + kShadowRayBias * normal;
-      uint k = l * config.extra_lights_per_light + e;
-      shadow.direction =
-          glm::normalize(extra_lights->positions[k] - shadow.position);
+      Ray shadow_ray;
+      shadow_ray.position = intersection_position + kShadowRayBias * normal;
 
-      Intersect(&shadow, spheres, sphere_count, triangles, triangle_count,
+      uint k = l * config.extra_lights_per_light + e;
+
+      glm::vec3 shadow_to_light =
+          extra_lights->positions[k] - shadow_ray.position;
+      float shadow_to_light_dist = glm::length(shadow_to_light);
+
+      shadow_ray.direction = shadow_to_light / shadow_to_light_dist;
+
+      Intersect(&shadow_ray, spheres, sphere_count, triangles, triangle_count,
                 &occluder);
 
-      to_light = glm::length(extra_lights->positions[k] - shadow.position);
-      if (occluder.hit && occluder.t + kTolerance < to_light) {
+      int occluded =
+          intersected && occluder.t + kTolerance < shadow_to_light_dist;
+      if (occluded) {
         continue;
       }
 
-      ln = glm::clamp<float>(glm::dot(shadow.direction, normal), 0, 1);
-      reflection = glm::normalize(2 * ln * normal - shadow.direction);
-      rv = glm::clamp<float>(glm::dot(reflection, -surface->ray->direction), 0,
-                             1);
+      l_dot_n = glm::clamp<float>(glm::dot(shadow_ray.direction, normal), 0, 1);
+      reflection = glm::normalize(2 * l_dot_n * normal - shadow_ray.direction);
+      r_dot_v = glm::clamp<float>(
+          glm::dot(reflection, -surface->ray->direction), 0, 1);
 
-      for (int c = 0; c < 3; ++c) {
-        phong_color[c] += GetPhongColor(
-            lights[l].color[c] / (config.extra_lights_per_light + 1),
-            color_diffuse[c], color_specular[c], ln, rv, shininess);
-      }
+      phong_color += PhongColor(
+          lights[l].color / (float)(config.extra_lights_per_light + 1),
+          color_diffuse, color_specular, l_dot_n, r_dot_v, shininess);
     }
   }
 
@@ -619,9 +637,9 @@ int main(int argc, char **argv) {
 
   std::vector<Ray> rays;
   if (config.rays_per_pixel == 1) {
-    MakeDefaultRays(&camera_position, IMG_W, IMG_H, FOV, FOCAL_LEN, &rays);
+    MakeDefaultRays(&kCameraPosition, IMG_W, IMG_H, FOV, FOCAL_LEN, &rays);
   } else if (config.rays_per_pixel > 1) {
-    MakeJitteredRays(&camera_position, IMG_W, IMG_H, FOV, FOCAL_LEN,
+    MakeJitteredRays(&kCameraPosition, IMG_W, IMG_H, FOV, FOCAL_LEN,
                      config.rays_per_pixel, &rays);
   }
 
