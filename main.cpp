@@ -398,10 +398,11 @@ static glm::vec3 PhongColor(glm::vec3 light_color, glm::vec3 diffuse_color,
 
 static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
                        const Scene *scene, int bounces,
-                       const Lights *extra_lights);
+                       const Lights *extra_lights, uint extra_lights_per_light);
 
 static glm::vec3 Trace(Ray *ray, const Scene *scene, int bounces,
-                       const Lights *extra_lights) {
+                       const Lights *extra_lights,
+                       uint extra_lights_per_light) {
   assert(ray);
   assert(scene);
 
@@ -411,13 +412,15 @@ static glm::vec3 Trace(Ray *ray, const Scene *scene, int bounces,
   if (!hit) {
     return kBackgroundColor;
   } else {
-    return Shade(ray, &intersection, scene, bounces, extra_lights);
+    return Shade(ray, &intersection, scene, bounces, extra_lights,
+                 extra_lights_per_light);
   }
 }
 
 static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
                        const Scene *scene, int bounces,
-                       const Lights *extra_lights) {
+                       const Lights *extra_lights,
+                       uint extra_lights_per_light) {
   assert(ray);
   assert(visible_intxn);
   assert(scene);
@@ -490,15 +493,15 @@ static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
     }
 
     phong_color +=
-        PhongColor(lights[i].color / (float)(config.extra_lights_per_light + 1),
+        PhongColor(lights[i].color / (float)(extra_lights_per_light + 1),
                    diffuse_color, specular_color, shininess,
                    shadow_ray.direction, normal, ray->direction);
 
-    for (uint j = 0; j < config.extra_lights_per_light; ++j) {
+    for (uint j = 0; j < extra_lights_per_light; ++j) {
       Ray shadow_ray;
       shadow_ray.position = visible_intxn_pos + kShadowRayBias * normal;
 
-      uint k = i * config.extra_lights_per_light + j;
+      uint k = i * extra_lights_per_light + j;
 
       glm::vec3 shadow_to_light =
           extra_lights->positions[k] - shadow_ray.position;
@@ -516,10 +519,10 @@ static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
         continue;
       }
 
-      phong_color += PhongColor(
-          lights[i].color / (float)(config.extra_lights_per_light + 1),
-          diffuse_color, specular_color, shininess, shadow_ray.direction,
-          normal, ray->direction);
+      phong_color +=
+          PhongColor(lights[i].color / (float)(extra_lights_per_light + 1),
+                     diffuse_color, specular_color, shininess,
+                     shadow_ray.direction, normal, ray->direction);
     }
   }
 
@@ -530,7 +533,8 @@ static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
     float vn = glm::clamp<float>(glm::dot(-ray->direction, normal), 0, 1);
     r.direction = glm::normalize(2 * vn * normal + ray->direction);
 
-    glm::vec3 color = Trace(&r, scene, bounces - 1, extra_lights);
+    glm::vec3 color =
+        Trace(&r, scene, bounces - 1, extra_lights, extra_lights_per_light);
     for (int i = 0; i < kRgbChannel__Count; ++i) {
       phong_color[i] *= (1 - specular_color[i]);
       phong_color[i] += specular_color[i] * color[i];
@@ -635,7 +639,8 @@ int main(int argc, char **argv) {
       glm::vec3 color;
       for (int i = 0; i < config.jitter; ++i) {
         uint j = (y * IMG_W + x) * config.jitter + i;
-        color += Trace(&rays[j], &scene, config.bounces, &extra_lights);
+        color += Trace(&rays[j], &scene, config.bounces, &extra_lights,
+                       config.extra_lights_per_light);
       }
       for (int i = 0; i < kRgbChannel__Count; ++i) {
         buffer[y][x][i] =
