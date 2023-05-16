@@ -4,4 +4,4 @@
 typedef unsigned int uint;
 typedef unsigned char uchar;
 
-#endif
+#endif  // TRAYCER_TYPES_HPP
