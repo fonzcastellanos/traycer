@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <glm/glm.hpp>
 
 Status ParseField(std::FILE *f, const char *name, glm::vec3 *vals) {
   assert(f);
@@ -228,6 +229,13 @@ Status LoadScene(const char *filepath, glm::vec3 *ambient_light, Scene *scene) {
         std::fprintf(stderr, "Failed to parse triangle.\n");
         return st;
       }
+
+      glm::vec3 e01 = t.vertices[1].position - t.vertices[0].position;
+      glm::vec3 e02 = t.vertices[2].position - t.vertices[0].position;
+      t.normal = glm::cross(e01, e02);
+      float len = glm::length(t.normal);
+      t.area = len / 2;
+      t.normal = t.normal / len;
 
       scene->triangles[scene->triangle_count] = t;
       ++scene->triangle_count;

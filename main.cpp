@@ -37,8 +37,6 @@
 
 const char *kWindowName = "traycer";
 
-constexpr uint kImgArea = IMG_W * IMG_H;
-
 constexpr float kTolerance = 0.000001;
 
 const glm::vec3 background_color(1, 1, 1);
@@ -305,23 +303,18 @@ static float IntersectTriangle(Ray *ray, const Triangle *tri, float *alpha,
 
   const auto &verts = tri->vertices;
 
-  // Calculate triangle normal.
-  glm::vec3 edge01 = verts[1].position - verts[0].position;
-  glm::vec3 edge02 = verts[2].position - verts[0].position;
-  glm::vec3 n = glm::cross(edge01, edge02);
-  float twice_tri_area = glm::length(n);
-  n = glm::normalize(n);
+  float n_dot_ray = glm::dot(tri->normal, ray->direction);
 
-  // Check if plane is parallel to ray.
-  float n_dot_ray = glm::dot(n, ray->direction);
-  if (glm::abs(n_dot_ray) < kTolerance) {
+  int plane_parallel_to_ray = glm::abs(n_dot_ray) < kTolerance;
+  if (plane_parallel_to_ray) {
     return 0;
   }
 
-  // Check for intersection behind ray origin.
-  float d = -glm::dot(n, verts[0].position);
-  float t = -(glm::dot(n, ray->position) + d) / n_dot_ray;
-  if (t < kTolerance) {
+  float d = -glm::dot(tri->normal, verts[0].position);
+  float t = -(glm::dot(tri->normal, ray->position) + d) / n_dot_ray;
+
+  int intersection_behind_ray_origin = t < kTolerance;
+  if (intersection_behind_ray_origin) {
     return 0;
   }
 
@@ -330,34 +323,37 @@ static float IntersectTriangle(Ray *ray, const Triangle *tri, float *alpha,
   // Perpendicular to subtriangle.
   glm::vec3 np;
 
-  glm::vec3 edge0p = p - verts[0].position;
-  np = glm::cross(edge01, edge0p);
+  glm::vec3 e0p = p - verts[0].position;
+  glm::vec3 e01 = verts[1].position - verts[0].position;
+  np = glm::cross(e01, e0p);
   // Inside-outside test.
-  if (glm::dot(n, np) < -kTolerance) {
+  if (glm::dot(tri->normal, np) < -kTolerance) {
     return 0;
   }
 
-  float gamma_ = glm::length(np) / twice_tri_area;
+  float twice_area = 2 * tri->area;
 
-  glm::vec3 edge12 = verts[2].position - verts[1].position;
-  glm::vec3 edge1p = p - verts[1].position;
-  np = glm::cross(edge12, edge1p);
-  if (glm::dot(n, np) < -kTolerance) {
+  float gamma_ = glm::length(np) / twice_area;
+
+  glm::vec3 e12 = verts[2].position - verts[1].position;
+  glm::vec3 e1p = p - verts[1].position;
+  np = glm::cross(e12, e1p);
+  if (glm::dot(tri->normal, np) < -kTolerance) {
     return 0;
   }
 
-  float alpha_ = glm::length(np) / twice_tri_area;
+  float alpha_ = glm::length(np) / twice_area;
 
-  glm::vec3 edge20 = verts[0].position - verts[2].position;
-  glm::vec3 edge2p = p - verts[2].position;
-  np = glm::cross(edge20, edge2p);
-  if (glm::dot(n, np) < -kTolerance) {
+  glm::vec3 e20 = verts[0].position - verts[2].position;
+  glm::vec3 e2p = p - verts[2].position;
+  np = glm::cross(e20, e2p);
+  if (glm::dot(tri->normal, np) < -kTolerance) {
     return 0;
   }
 
   *alpha = alpha_;
   *gamma = gamma_;
-  *beta = glm::length(np) / twice_tri_area;
+  *beta = 1 - alpha_ - gamma_;
 
   return t;
 }

@@ -28,6 +28,8 @@ struct Vertex {
 
 struct Triangle {
   Vertex vertices[3];
+  glm::vec3 normal;
+  float area;
 };
 
 struct Light {
