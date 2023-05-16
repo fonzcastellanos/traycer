@@ -104,11 +104,7 @@ void Idle() {
       if (status != kStatus_Ok) {
         std::fprintf(stderr, "Failed to save JPEG file %s.\n",
                      config.render_filepath);
-#ifdef __APPLE__
-        exit(EXIT_FAILURE);
-#else
-        glutLeaveMainLoop();
-#endif
+        std::exit(EXIT_FAILURE);
       }
     }
   }
@@ -118,13 +114,7 @@ void Idle() {
 static void OnKeyPress(uchar key, int x, int y) {
   switch (key) {
     case 27: {  // ESC key
-#ifdef __APPLE__
       std::exit(EXIT_SUCCESS);
-#elif defined(linux)
-      glutLeaveMainLoop();
-#else
-#error Unsupported platform.
-#endif
       break;
     }
   }
