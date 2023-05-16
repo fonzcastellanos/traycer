@@ -180,9 +180,8 @@ Status ParseLight(std::FILE *f, Light *l) {
   return kStatus_Ok;
 }
 
-Status LoadScene(const char *filepath, glm::vec3 *ambient_light, Scene *scene) {
+Status LoadScene(const char *filepath, Scene *scene) {
   assert(filepath);
-  assert(ambient_light);
   assert(scene);
 
   std::FILE *file = std::fopen(filepath, "r");
@@ -203,7 +202,7 @@ Status LoadScene(const char *filepath, glm::vec3 *ambient_light, Scene *scene) {
 
   std::printf("Object count: %u\n", obj_count);
 
-  Status st = ParseField(file, "amb:", ambient_light);
+  Status st = ParseField(file, "amb:", &scene->ambient_light);
   if (st != kStatus_Ok) {
     std::fprintf(stderr, "Failed to parse field of floats.\n");
     return kStatus_IoError;

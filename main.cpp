@@ -49,8 +49,6 @@ static RenderTarget render_target = kRenderTarget_Window;
 
 uchar buffer[IMG_H][IMG_W][3];
 
-glm::vec3 ambient_light;
-
 static void PlotPixelDisplay(int x, int y, uchar r, uchar g, uchar b) {
   glColor3f(r * (1.0f / 255), g * (1.0f / 255), b * (1.0f / 255));
   glVertex2i(x, y);
@@ -480,8 +478,8 @@ static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
     }
   }
 
-  // Launch shadow rays for local phong color.
-  glm::vec3 phong_color = ambient_light;
+  // Launch shadow rays.
+  glm::vec3 total_color = scene->ambient_light;
   for (uint i = 0; i < light_count; ++i) {
     Ray shadow_ray;
     shadow_ray.position = visible_intxn_pos + kShadowRayBias * normal;
@@ -499,11 +497,12 @@ static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
       continue;
     }
 
-    phong_color +=
+    total_color +=
         PhongColor(lights[i].color / (float)(extra_lights_per_light + 1),
                    diffuse_color, specular_color, shininess,
                    shadow_ray.direction, normal, ray->direction);
 
+    // Launch extra shadow rays.
     for (uint j = 0; j < extra_lights_per_light; ++j) {
       Ray shadow_ray;
       shadow_ray.position = visible_intxn_pos + kShadowRayBias * normal;
@@ -526,7 +525,7 @@ static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
         continue;
       }
 
-      phong_color +=
+      total_color +=
           PhongColor(lights[i].color / (float)(extra_lights_per_light + 1),
                      diffuse_color, specular_color, shininess,
                      shadow_ray.direction, normal, ray->direction);
@@ -534,7 +533,7 @@ static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
   }
 
   if (bounces <= 0) {
-    return phong_color;
+    return total_color;
   }
 
   // Launch reflected rays.
@@ -546,9 +545,9 @@ static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
   glm::vec3 color =
       Trace(&r, scene, bounces - 1, extra_lights, extra_lights_per_light);
 
-  phong_color = phong_color * (1.0f - specular_color) + specular_color * color;
+  total_color = total_color * (1.0f - specular_color) + specular_color * color;
 
-  return phong_color;
+  return total_color;
 }
 
 static Status ParseConfig(uint argc, char *argv[], Config *c) {
@@ -594,7 +593,7 @@ int main(int argc, char **argv) {
   }
 
   Scene scene;
-  st = LoadScene(config.scene_filepath, &ambient_light, &scene);
+  st = LoadScene(config.scene_filepath, &scene);
   if (st != kStatus_Ok) {
     std::fprintf(stderr, "Failed to load scene.\n");
     return EXIT_FAILURE;

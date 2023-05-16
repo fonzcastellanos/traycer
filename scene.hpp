@@ -38,6 +38,8 @@ struct Light {
 };
 
 struct Scene {
+  glm::vec3 ambient_light;
+
   Light lights[MAX_LIGHT_COUNT];
   uint light_count;
 
@@ -48,6 +50,6 @@ struct Scene {
   uint triangle_count;
 };
 
-Status LoadScene(const char* filepath, glm::vec3* ambient_light, Scene* scene);
+Status LoadScene(const char* filepath, Scene* scene);
 
 #endif  // TRAYCER_SCENE_HPP
