@@ -13,8 +13,8 @@ spheres.scene             | table.scene
 - Light rays intersect objects composed of
   - Triangles
   - Spheres
-- Phong shading
 - Anti-aliasing via jittered supersampling
+- Phong shading
 - Recursive reflection
 - Soft shadows
 
@@ -54,10 +54,12 @@ cmake --build build --config Release
 The built targets are placed in the directory `build`. There is only one executable target: `traycer`.
 
 ## Usage
-`./build/traycer [options...] <scene-file>`
-- `--rays-per-pixel <unsigned integer>`: If > 1, then supersampling is applied. Default is 1.
-- `--reflection-bounces <unsigned integer>`: The depth of reflection cursion. Default is 0.
-- `--extra-lights-per-light <unsigned integer>`: If > 0, soft shadows are applied. Default is 0. 
-- `--render-file <filepath>`: Rendered image will be written to a JPEG file at the path provided.
+`./build/traycer [options...] <scene file>`
+
+Options:
+- `--jitter <number of rays per pixel>`: Enables supersampling via jittering if option argument is greater than 0. Default option argument is 0.
+- `--bounces <number of bounces>`: The depth of reflection recursion. Default option argument is 0.
+- `--extra-lights-per-light <unsigned integer>`: Soft shadows are applied if option argument is greater than 0. Default option argument is 0. 
+- `--render-to-file <filepath>`: Rendered image will be written to a JPEG file at the path provided.
 
 The [`scenes`](scenes) directory contains example scene files. 

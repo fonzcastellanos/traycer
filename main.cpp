@@ -567,7 +567,7 @@ static Status ParseConfig(uint argc, char *argv[], Config *c) {
       {"bounces", cli::kOptArgType_Int, &c->bounces},
       {"extra-lights-per-light", cli::kOptArgType_Uint,
        &c->extra_lights_per_light},
-      {"render-file", cli::kOptArgType_String, c->render_filepath},
+      {"render-to-file", cli::kOptArgType_String, c->render_filepath},
   };
   uint size = sizeof(opts) / sizeof(opts[0]);
   uint argi;
