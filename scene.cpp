@@ -10,8 +10,6 @@ Status ParseField(std::FILE *f, const char *name, glm::vec3 *vals) {
   assert(name);
   assert(vals);
 
-  glm::vec3 &v_ = *vals;
-
   char str[100];
 
   int rc = std::fscanf(f, "%s", str);
@@ -30,13 +28,13 @@ Status ParseField(std::FILE *f, const char *name, glm::vec3 *vals) {
     return kStatus_UnspecifiedError;
   };
 
-  rc = std::fscanf(f, "%f %f %f", &v_[0], &v_[1], &v_[2]);
+  glm::vec3 &vals_ = *vals;
+
+  rc = std::fscanf(f, "%f %f %f", &vals_[0], &vals_[1], &vals_[2]);
   if (rc != 3) {
     std::fprintf(stderr, "Failed to parse values of field \"%s\".\n", name);
     return kStatus_IoError;
   }
-
-  std::printf("%s %f %f %f\n", name, v_[0], v_[1], v_[2]);
 
   return kStatus_Ok;
 }
@@ -69,8 +67,6 @@ Status ParseField(std::FILE *f, const char *name, float *val) {
     std::fprintf(stderr, "Failed to parse value of field \"%s\".\n", name);
     return kStatus_IoError;
   }
-
-  std::printf("%s: %f\n", name, *val);
 
   return kStatus_Ok;
 }
@@ -200,8 +196,6 @@ Status LoadScene(const char *filepath, Scene *scene) {
     return kStatus_IoError;
   }
 
-  std::printf("Object count: %u\n", obj_count);
-
   Status st = ParseField(file, "amb:", &scene->ambient_light);
   if (st != kStatus_Ok) {
     std::fprintf(stderr, "Failed to parse field of floats.\n");
@@ -218,8 +212,6 @@ Status LoadScene(const char *filepath, Scene *scene) {
       std::fprintf(stderr, "Failed to read object type.\n");
       return kStatus_IoError;
     }
-
-    std::printf("Object type: %s\n", type);
 
     if (std::strcmp(type, "triangle") == 0) {
       Triangle t;

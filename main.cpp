@@ -77,7 +77,7 @@ static Status RenderToJpeg(uchar *buffer, uint w, uint h,
     return kStatus_IoError;
   }
 
-  std::printf("Rendered to JPEG file %s.\n", filepath);
+  std::printf("Rendered scene to JPEG file %s.\n", filepath);
   std::fflush(stdout);
 
   return kStatus_Ok;
