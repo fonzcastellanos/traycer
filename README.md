@@ -2,15 +2,15 @@
 
 ![License](https://img.shields.io/github/license/fonzcastellanos/traycer)
 
-A ray tracer, which generates a 2D image by emitting light rays and simulating the effects of their intersections with virtual 3D objects.
+A ray tracer.
 
 spheres.scene             | table.scene
 :------------------------:|:-----------------------------------:
 ![](spheres.jpg)          | ![](table.jpg)
-10 rays/pixel, 10 bounces | 5 rays/pixel, 10 extra lights/light
+10 jittered rays/pixel, 10 reflection bounces | 5 jittered rays/pixel, 10 extra lights/light (for producing soft shadows)
 
 ## Features
-- Light rays intersect objects composed of
+- Ray-surface intersections with the following surfaces:
   - Triangles
   - Spheres
 - Anti-aliasing via jittered supersampling
