@@ -385,11 +385,20 @@ static int Intersect(Ray *ray, const Sphere *spheres, uint sphere_count,
 }
 
 static glm::vec3 PhongColor(glm::vec3 light_color, glm::vec3 diffuse_color,
-                            glm::vec3 specular_color, float l_dot_n,
-                            float r_dot_v, float shininess) {
+                            glm::vec3 specular_color, float shininess,
+                            glm::vec3 shadow_ray_direction, glm::vec3 normal,
+                            glm::vec3 view_ray_direction) {
+  float l_dot_n =
+      glm::clamp<float>(glm::dot(shadow_ray_direction, normal), 0, 1);
+  glm::vec3 reflection =
+      glm::normalize(2 * l_dot_n * normal - shadow_ray_direction);
+  float r_dot_v =
+      glm::clamp<float>(glm::dot(reflection, -view_ray_direction), 0, 1);
+
   glm::vec3 result =
       light_color * ((diffuse_color * l_dot_n) +
                      (specular_color * glm::pow(r_dot_v, shininess)));
+
   return result;
 }
 
@@ -467,9 +476,6 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
   // Launch shadow rays for local phong color.
   Intersection occluder;
   glm::vec3 phong_color = ambient_light;
-  float l_dot_n;
-  float r_dot_v;
-  glm::vec3 reflection;
   for (uint l = 0; l < light_count; ++l) {
     // Launch main shadow ray.
     Ray main_shadow_ray;
@@ -488,16 +494,10 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
       continue;
     }
 
-    l_dot_n =
-        glm::clamp<float>(glm::dot(main_shadow_ray.direction, normal), 0, 1);
-    reflection =
-        glm::normalize(2 * l_dot_n * normal - main_shadow_ray.direction);
-    r_dot_v =
-        glm::clamp<float>(glm::dot(reflection, -surface->ray->direction), 0, 1);
-
     phong_color +=
         PhongColor(lights[l].color / (float)(config.extra_lights_per_light + 1),
-                   color_diffuse, color_specular, l_dot_n, r_dot_v, shininess);
+                   color_diffuse, color_specular, shininess,
+                   main_shadow_ray.direction, normal, surface->ray->direction);
 
     // launch extra shadow rays
     for (uint e = 0; e < config.extra_lights_per_light; ++e) {
@@ -520,14 +520,10 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
         continue;
       }
 
-      l_dot_n = glm::clamp<float>(glm::dot(shadow_ray.direction, normal), 0, 1);
-      reflection = glm::normalize(2 * l_dot_n * normal - shadow_ray.direction);
-      r_dot_v = glm::clamp<float>(
-          glm::dot(reflection, -surface->ray->direction), 0, 1);
-
       phong_color += PhongColor(
           lights[l].color / (float)(config.extra_lights_per_light + 1),
-          color_diffuse, color_specular, l_dot_n, r_dot_v, shininess);
+          color_diffuse, color_specular, shininess, shadow_ray.direction,
+          normal, surface->ray->direction);
     }
   }
 
