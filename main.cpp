@@ -49,7 +49,7 @@ static RenderTarget render_target = kRenderTarget_Window;
 
 static uchar img_buffer[IMG_W * IMG_H * kRgbChannel__Count];
 
-static void RenderToWindow(uint w, uint h) {
+static void RenderToWindow(const uchar *buffer, uint w, uint h) {
   for (uint x = 0; x < w; ++x) {
     glPointSize(2);
     glBegin(GL_POINTS);
@@ -68,7 +68,7 @@ static void RenderToWindow(uint w, uint h) {
   std::fflush(stdout);
 }
 
-static Status RenderToJpeg(uchar *buffer, uint w, uint h,
+static Status RenderToJpeg(const uchar *buffer, uint w, uint h,
                            const char *filepath) {
   stbi_flip_vertically_on_write(1);
   int rc = stbi_write_jpg(filepath, w, h, kRgbChannel__Count, &buffer[0], 95);
@@ -99,7 +99,7 @@ void Idle() {
   // hack to make it only draw once
   static int once = 0;
   if (!once) {
-    RenderToWindow(IMG_W, IMG_H);
+    RenderToWindow(img_buffer, IMG_W, IMG_H);
     if (render_target == kRenderTarget_Jpeg) {
       Status status =
           RenderToJpeg(img_buffer, IMG_W, IMG_H, config.render_filepath);
