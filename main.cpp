@@ -47,49 +47,35 @@ const glm::vec3 kCameraPosition(0, 0, 0);
 static Config config;
 static RenderTarget render_target = kRenderTarget_Window;
 
-uchar buffer[IMG_H][IMG_W][3];
-
-static void PlotPixelDisplay(int x, int y, uchar r, uchar g, uchar b) {
-  glColor3f(r * (1.0f / 255), g * (1.0f / 255), b * (1.0f / 255));
-  glVertex2i(x, y);
-}
-
-static void PlotPixelJpeg(int x, int y, uchar r, uchar g, uchar b) {
-  buffer[y][x][0] = r;
-  buffer[y][x][1] = g;
-  buffer[y][x][2] = b;
-}
-
-static void PlotPixel(int x, int y, uchar r, uchar g, uchar b) {
-  PlotPixelDisplay(x, y, r, g, b);
-  if (render_target == kRenderTarget_Jpeg) {
-    PlotPixelJpeg(x, y, r, g, b);
-  }
-}
+static uchar buffer[IMG_W * IMG_H * kRgbChannel__Count];
 
 static void DrawScene() {
   for (uint x = 0; x < IMG_W; ++x) {
     glPointSize(2);
     glBegin(GL_POINTS);
     for (uint y = 0; y < IMG_H; ++y) {
-      PlotPixel(x, y, buffer[y][x][0], buffer[y][x][1], buffer[y][x][2]);
+      uint i = (y * IMG_W + x) * kRgbChannel__Count;
+      uchar r = buffer[i + kRgbChannel_Red];
+      uchar g = buffer[i + kRgbChannel_Green];
+      uchar b = buffer[i + kRgbChannel_Blue];
+      glColor3f(r * (1.0f / 255), g * (1.0f / 255), b * (1.0f / 255));
+      glVertex2i(x, y);
     }
     glEnd();
     glFlush();
   }
-  std::printf("Done!\n");
-  fflush(stdout);
+  std::printf("Done drawing scene.\n");
+  std::fflush(stdout);
 }
 
-static Status SaveJpeg() {
-  std::printf("Saving JPEG file %s.\n", config.render_filepath);
+static Status RenderToJpeg(uchar *buffer, uint w, uint h,
+                           const char *filepath) {
+  std::printf("Rendered to JPEG file %s.\n", filepath);
 
   stbi_flip_vertically_on_write(1);
-  int rc = stbi_write_jpg(config.render_filepath, IMG_W, IMG_H,
-                          kRgbChannel__Count, &buffer[0][0][0], 95);
+  int rc = stbi_write_jpg(filepath, w, h, kRgbChannel__Count, &buffer[0], 95);
   if (rc == 0) {
-    std::fprintf(stderr, "Could not write data to JPEG file %s.\n",
-                 config.render_filepath);
+    std::fprintf(stderr, "Could not write data to JPEG file %s.\n", filepath);
     return kStatus_IoError;
   }
 
@@ -114,7 +100,8 @@ void Idle() {
   if (!once) {
     DrawScene();
     if (render_target == kRenderTarget_Jpeg) {
-      Status status = SaveJpeg();
+      Status status =
+          RenderToJpeg(buffer, IMG_W, IMG_H, config.render_filepath);
       if (status != kStatus_Ok) {
         std::fprintf(stderr, "Failed to save JPEG file %s.\n",
                      config.render_filepath);
@@ -136,6 +123,7 @@ static void ViewportCorners(uint w, uint h, float fov, float z, glm::vec3 *tr,
   assert(br);
   assert(bl);
 
+  assert(h > 0);
   assert(fov > kTolerance);
 
   float aspect = (float)w / h;
@@ -150,6 +138,8 @@ static void ViewportCorners(uint w, uint h, float fov, float z, glm::vec3 *tr,
 static void MakeDefaultRays(glm::vec3 camera_position, uint w, uint h,
                             float fov, float focal_len,
                             std::vector<Ray> *rays) {
+  assert(w > 0);
+  assert(h > 0);
   assert(fov + kTolerance > 0);
   assert(focal_len + kTolerance > 0);
   assert(rays);
@@ -182,6 +172,8 @@ static void MakeDefaultRays(glm::vec3 camera_position, uint w, uint h,
 static void MakeJitteredRays(glm::vec3 camera_position, uint w, uint h,
                              float fov, float focal_len, uint rays_per_pixel,
                              std::vector<Ray> *rays) {
+  assert(w > 0);
+  assert(h > 0);
   assert(fov + kTolerance > 0);
   assert(focal_len + kTolerance > 0);
   assert(rays_per_pixel > 0);
@@ -652,7 +644,7 @@ int main(int argc, char **argv) {
                        config.extra_lights_per_light);
       }
       for (int i = 0; i < kRgbChannel__Count; ++i) {
-        buffer[y][x][i] =
+        buffer[(y * IMG_W + x) * kRgbChannel__Count + i] =
             glm::clamp<float>(color[i] / rays_per_pixel, 0, 1) * 255;
       }
     }
