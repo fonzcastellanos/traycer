@@ -634,24 +634,27 @@ int main(int argc, char **argv) {
   }
 
   std::vector<Ray> rays;
+  int rays_per_pixel;
   if (config.jitter > 0) {
+    rays_per_pixel = config.jitter;
     MakeJitteredRays(kCameraPosition, IMG_W, IMG_H, FOV, FOCAL_LEN,
-                     config.jitter, &rays);
-  } else if (config.jitter > 1) {
+                     rays_per_pixel, &rays);
+  } else {
+    rays_per_pixel = 1;
     MakeDefaultRays(kCameraPosition, IMG_W, IMG_H, FOV, FOCAL_LEN, &rays);
   }
 
   for (int y = 0; y < IMG_H; ++y) {
     for (int x = 0; x < IMG_W; ++x) {
       glm::vec3 color;
-      for (int i = 0; i < config.jitter; ++i) {
-        uint j = (y * IMG_W + x) * config.jitter + i;
+      for (int i = 0; i < rays_per_pixel; ++i) {
+        uint j = (y * IMG_W + x) * rays_per_pixel + i;
         color += Trace(&rays[j], &scene, config.bounces, &extra_lights,
                        config.extra_lights_per_light);
       }
       for (int i = 0; i < kRgbChannel__Count; ++i) {
         buffer[y][x][i] =
-            glm::clamp<float>(color[i] / config.jitter, 0, 1) * 255;
+            glm::clamp<float>(color[i] / rays_per_pixel, 0, 1) * 255;
       }
     }
   }
