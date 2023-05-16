@@ -131,9 +131,8 @@ void Idle() {
   once = 1;
 }
 
-static void ProjectionPlaneCorners(uint w, uint h, float fov, float z,
-                                   glm::vec3 *tr, glm::vec3 *tl, glm::vec3 *br,
-                                   glm::vec3 *bl) {
+static void ViewportCorners(uint w, uint h, float fov, float z, glm::vec3 *tr,
+                            glm::vec3 *tl, glm::vec3 *br, glm::vec3 *bl) {
   assert(tr);
   assert(tl);
   assert(br);
@@ -150,10 +149,9 @@ static void ProjectionPlaneCorners(uint w, uint h, float fov, float z,
   *bl = glm::vec3(-aspect * tan_half_fov, -tan_half_fov, z);
 }
 
-static void MakeDefaultRays(const glm::vec3 *camera_position, uint w, uint h,
+static void MakeDefaultRays(glm::vec3 camera_position, uint w, uint h,
                             float fov, float focal_len,
                             std::vector<Ray> *rays) {
-  assert(camera_position);
   assert(fov + kTolerance > 0);
   assert(focal_len + kTolerance > 0);
   assert(rays);
@@ -163,12 +161,11 @@ static void MakeDefaultRays(const glm::vec3 *camera_position, uint w, uint h,
   glm::vec3 tl;
   glm::vec3 br;
   glm::vec3 bl;
-  ProjectionPlaneCorners(w, h, fov, projection_plane_z, &tr, &tl, &br, &bl);
-
-  uint pixel_count = w * h;
+  ViewportCorners(w, h, fov, projection_plane_z, &tr, &tl, &br, &bl);
 
   auto &rays_ = *rays;
 
+  uint pixel_count = w * h;
   rays_.resize(pixel_count);
 
   float pix_w = (tr.x - tl.x) / w;
@@ -178,16 +175,15 @@ static void MakeDefaultRays(const glm::vec3 *camera_position, uint w, uint h,
   for (float y = br.y + pix_h * 0.5f; y < tr.y; y += pix_h) {
     for (float x = tl.x + pix_w * 0.5f; x < tr.x; x += pix_w) {
       rays_[i].position = glm::vec3(x, y, projection_plane_z);
-      rays_[i].direction = glm::normalize(rays_[i].position - *camera_position);
+      rays_[i].direction = glm::normalize(rays_[i].position - camera_position);
       ++i;
     }
   }
 }
 
-static void MakeJitteredRays(const glm::vec3 *camera_position, uint w, uint h,
+static void MakeJitteredRays(glm::vec3 camera_position, uint w, uint h,
                              float fov, float focal_len, uint rays_per_pixel,
                              std::vector<Ray> *rays) {
-  assert(camera_position);
   assert(fov + kTolerance > 0);
   assert(focal_len + kTolerance > 0);
   assert(rays_per_pixel > 0);
@@ -198,12 +194,11 @@ static void MakeJitteredRays(const glm::vec3 *camera_position, uint w, uint h,
   glm::vec3 tl;
   glm::vec3 br;
   glm::vec3 bl;
-  ProjectionPlaneCorners(w, h, fov, projection_plane_z, &tr, &tl, &br, &bl);
-
-  uint pixel_count = w * h;
+  ViewportCorners(w, h, fov, projection_plane_z, &tr, &tl, &br, &bl);
 
   auto &rays_ = *rays;
 
+  uint pixel_count = w * h;
   rays_.resize(pixel_count * rays_per_pixel);
 
   float pix_w = (tr.x - tl.x) / w;
@@ -224,7 +219,7 @@ static void MakeJitteredRays(const glm::vec3 *camera_position, uint w, uint h,
         rays_[k].position =
             glm::vec3(x + x_offset, y + y_offset, projection_plane_z);
         rays_[k].direction =
-            glm::normalize(rays_[k].position - *camera_position);
+            glm::normalize(rays_[k].position - camera_position);
       }
       ++i;
     }
@@ -476,17 +471,15 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
   // Launch shadow rays for local phong color.
   Intersection occluder;
   glm::vec3 phong_color = ambient_light;
-  for (uint l = 0; l < light_count; ++l) {
-    // Launch main shadow ray.
-    Ray main_shadow_ray;
-    main_shadow_ray.position = intersection_position + kShadowRayBias * normal;
+  for (uint i = 0; i < light_count; ++i) {
+    Ray shadow_ray;
+    shadow_ray.position = intersection_position + kShadowRayBias * normal;
 
-    glm::vec3 shadow_to_light = lights[l].position - main_shadow_ray.position;
+    glm::vec3 shadow_to_light = lights[i].position - shadow_ray.position;
     float shadow_to_light_dist = glm::length(shadow_to_light);
+    shadow_ray.direction = shadow_to_light / shadow_to_light_dist;
 
-    main_shadow_ray.direction = shadow_to_light / shadow_to_light_dist;
-
-    int hit = Intersect(&main_shadow_ray, spheres, sphere_count, triangles,
+    int hit = Intersect(&shadow_ray, spheres, sphere_count, triangles,
                         triangle_count, &occluder);
 
     int occluded = hit && occluder.t + kTolerance < shadow_to_light_dist;
@@ -495,16 +488,15 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
     }
 
     phong_color +=
-        PhongColor(lights[l].color / (float)(config.extra_lights_per_light + 1),
+        PhongColor(lights[i].color / (float)(config.extra_lights_per_light + 1),
                    color_diffuse, color_specular, shininess,
-                   main_shadow_ray.direction, normal, surface->ray->direction);
+                   shadow_ray.direction, normal, surface->ray->direction);
 
-    // launch extra shadow rays
-    for (uint e = 0; e < config.extra_lights_per_light; ++e) {
+    for (uint j = 0; j < config.extra_lights_per_light; ++j) {
       Ray shadow_ray;
       shadow_ray.position = intersection_position + kShadowRayBias * normal;
 
-      uint k = l * config.extra_lights_per_light + e;
+      uint k = i * config.extra_lights_per_light + j;
 
       glm::vec3 shadow_to_light =
           extra_lights->positions[k] - shadow_ray.position;
@@ -521,7 +513,7 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
       }
 
       phong_color += PhongColor(
-          lights[l].color / (float)(config.extra_lights_per_light + 1),
+          lights[i].color / (float)(config.extra_lights_per_light + 1),
           color_diffuse, color_specular, shininess, shadow_ray.direction,
           normal, surface->ray->direction);
     }
@@ -630,9 +622,9 @@ int main(int argc, char **argv) {
 
   std::vector<Ray> rays;
   if (config.rays_per_pixel == 1) {
-    MakeDefaultRays(&kCameraPosition, IMG_W, IMG_H, FOV, FOCAL_LEN, &rays);
+    MakeDefaultRays(kCameraPosition, IMG_W, IMG_H, FOV, FOCAL_LEN, &rays);
   } else if (config.rays_per_pixel > 1) {
-    MakeJitteredRays(&kCameraPosition, IMG_W, IMG_H, FOV, FOCAL_LEN,
+    MakeJitteredRays(kCameraPosition, IMG_W, IMG_H, FOV, FOCAL_LEN,
                      config.rays_per_pixel, &rays);
   }
 
