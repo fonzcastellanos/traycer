@@ -59,7 +59,7 @@ The built targets are placed in the directory `build`. There is only one executa
 Options:
 - `--jitter <number of rays per pixel>`: Enables supersampling via jittering if option argument is greater than 0. Default option argument is 0.
 - `--bounces <number of bounces>`: The depth of reflection recursion. Default option argument is 0.
-- `--extra-lights-per-light <unsigned integer>`: Soft shadows are applied if option argument is greater than 0. Default option argument is 0. 
+- `--soft-shadows <number of extra lights per light>`: Soft shadows are applied if option argument is greater than 0. Default option argument is 0. 
 - `--render-to-file <filepath>`: Rendered image will be written to a JPEG file at the path provided.
 
 The [`scenes`](scenes) directory contains example scene files. 
