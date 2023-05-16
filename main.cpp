@@ -545,8 +545,8 @@ static Status ParseConfig(uint argc, char *argv[], Config *c) {
   assert(c);
 
   cli::Opt opts[] = {
-      {"rays-per-pixel", cli::kOptType_Int, &c->rays_per_pixel},
-      {"reflection-bounces", cli::kOptType_Int, &c->reflection_bounces},
+      {"jitter", cli::kOptType_Int, &c->jitter},
+      {"bounces", cli::kOptType_Int, &c->bounces},
       {"extra-lights-per-light", cli::kOptType_Uint,
        &c->extra_lights_per_light},
       {"render-file", cli::kOptType_String, c->render_filepath},
@@ -623,24 +623,23 @@ int main(int argc, char **argv) {
   }
 
   std::vector<Ray> rays;
-  if (config.rays_per_pixel == 1) {
-    MakeDefaultRays(kCameraPosition, IMG_W, IMG_H, FOV, FOCAL_LEN, &rays);
-  } else if (config.rays_per_pixel > 1) {
+  if (config.jitter > 0) {
     MakeJitteredRays(kCameraPosition, IMG_W, IMG_H, FOV, FOCAL_LEN,
-                     config.rays_per_pixel, &rays);
+                     config.jitter, &rays);
+  } else if (config.jitter > 1) {
+    MakeDefaultRays(kCameraPosition, IMG_W, IMG_H, FOV, FOCAL_LEN, &rays);
   }
 
   for (int y = 0; y < IMG_H; ++y) {
     for (int x = 0; x < IMG_W; ++x) {
       glm::vec3 color;
-      for (int i = 0; i < config.rays_per_pixel; ++i) {
-        uint j = (y * IMG_W + x) * config.rays_per_pixel + i;
-        color +=
-            Trace(&rays[j], &scene, config.reflection_bounces, &extra_lights);
+      for (int i = 0; i < config.jitter; ++i) {
+        uint j = (y * IMG_W + x) * config.jitter + i;
+        color += Trace(&rays[j], &scene, config.bounces, &extra_lights);
       }
       for (int i = 0; i < kRgbChannel__Count; ++i) {
         buffer[y][x][i] =
-            glm::clamp<float>(color[i] / config.rays_per_pixel, 0, 1) * 255;
+            glm::clamp<float>(color[i] / config.jitter, 0, 1) * 255;
       }
     }
   }
