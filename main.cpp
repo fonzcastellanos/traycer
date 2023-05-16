@@ -402,10 +402,9 @@ static glm::vec3 TraceRay(Ray *ray, const Scene *scene, int bounces,
   assert(scene);
 
   Intersection intersection;
-  int found_intersection =
-      Intersect(ray, scene->spheres, scene->sphere_count, scene->triangles,
-                scene->triangle_count, &intersection);
-  if (!found_intersection) {
+  int hit = Intersect(ray, scene->spheres, scene->sphere_count,
+                      scene->triangles, scene->triangle_count, &intersection);
+  if (!hit) {
     return kBackgroundColor;
   } else {
     return Shade(&intersection, scene, bounces, extra_lights);
@@ -481,11 +480,10 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
 
     main_shadow_ray.direction = shadow_to_light / shadow_to_light_dist;
 
-    int intersected = Intersect(&main_shadow_ray, spheres, sphere_count,
-                                triangles, triangle_count, &occluder);
+    int hit = Intersect(&main_shadow_ray, spheres, sphere_count, triangles,
+                        triangle_count, &occluder);
 
-    int occluded =
-        intersected && occluder.t + kTolerance < shadow_to_light_dist;
+    int occluded = hit && occluder.t + kTolerance < shadow_to_light_dist;
     if (occluded) {
       continue;
     }
@@ -514,11 +512,10 @@ static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
 
       shadow_ray.direction = shadow_to_light / shadow_to_light_dist;
 
-      Intersect(&shadow_ray, spheres, sphere_count, triangles, triangle_count,
-                &occluder);
+      int hit = Intersect(&shadow_ray, spheres, sphere_count, triangles,
+                          triangle_count, &occluder);
 
-      int occluded =
-          intersected && occluder.t + kTolerance < shadow_to_light_dist;
+      int occluded = hit && occluder.t + kTolerance < shadow_to_light_dist;
       if (occluded) {
         continue;
       }
