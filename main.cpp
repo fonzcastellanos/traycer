@@ -49,7 +49,7 @@ static RenderTarget render_target = kRenderTarget_Window;
 
 static uchar buffer[IMG_W * IMG_H * kRgbChannel__Count];
 
-static void DrawScene() {
+static void RenderToWindow() {
   for (uint x = 0; x < IMG_W; ++x) {
     glPointSize(2);
     glBegin(GL_POINTS);
@@ -64,20 +64,21 @@ static void DrawScene() {
     glEnd();
     glFlush();
   }
-  std::printf("Done drawing scene.\n");
+  std::printf("Rendered scene to window.\n");
   std::fflush(stdout);
 }
 
 static Status RenderToJpeg(uchar *buffer, uint w, uint h,
                            const char *filepath) {
-  std::printf("Rendered to JPEG file %s.\n", filepath);
-
   stbi_flip_vertically_on_write(1);
   int rc = stbi_write_jpg(filepath, w, h, kRgbChannel__Count, &buffer[0], 95);
   if (rc == 0) {
     std::fprintf(stderr, "Could not write data to JPEG file %s.\n", filepath);
     return kStatus_IoError;
   }
+
+  std::printf("Rendered to JPEG file %s.\n", filepath);
+  std::fflush(stdout);
 
   return kStatus_Ok;
 }
@@ -98,7 +99,7 @@ void Idle() {
   // hack to make it only draw once
   static int once = 0;
   if (!once) {
-    DrawScene();
+    RenderToWindow();
     if (render_target == kRenderTarget_Jpeg) {
       Status status =
           RenderToJpeg(buffer, IMG_W, IMG_H, config.render_filepath);
@@ -114,6 +115,21 @@ void Idle() {
     }
   }
   once = 1;
+}
+
+static void OnKeyPress(uchar key, int x, int y) {
+  switch (key) {
+    case 27: {  // ESC key
+#ifdef __APPLE__
+      std::exit(EXIT_SUCCESS);
+#elif defined(linux)
+      glutLeaveMainLoop();
+#else
+#error Unsupported platform.
+#endif
+      break;
+    }
+  }
 }
 
 static void ViewportCorners(uint w, uint h, float fov, float z, glm::vec3 *tr,
@@ -598,6 +614,7 @@ int main(int argc, char **argv) {
   glutCreateWindow(kWindowName);
   glutDisplayFunc(Display);
   glutIdleFunc(Idle);
+  glutKeyboardFunc(OnKeyPress);
   Init();
 
   Lights extra_lights;
