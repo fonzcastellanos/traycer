@@ -1,13 +1,11 @@
-#ifdef WIN32
-#include <windows.h>
-#endif
-
-#if defined(WIN32) || defined(linux)
+#ifdef linux
 #include <GL/gl.h>
 #include <GL/glut.h>
 #elif defined(__APPLE__)
 #include <GLUT/glut.h>
 #include <OpenGL/gl.h>
+#else
+#error Unsupported platform.
 #endif
 
 #include <cassert>
