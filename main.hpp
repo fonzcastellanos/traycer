@@ -31,27 +31,23 @@ struct Ray {
   glm::vec3 direction;
 };
 
-enum GeometryType { kGeometryType_Sphere, kGeometryType_Triangle };
+enum SurfaceType {
+  kSurfaceType_Sphere,
+  kSurfaceType_Triangle,
+  kSurfaceType__Count
+};
 
 struct TriangleIntersection {
-  uint index;
   float alpha;
   float beta;
   float gamma;
 };
 
-struct SphereIntersection {
-  uint index;
-};
-
 struct Intersection {
-  GeometryType type;
-  union {
-    SphereIntersection sphere;
-    TriangleIntersection triangle;
-  };
-  Ray *ray;
+  SurfaceType type;
+  uint index;
   float t;
+  TriangleIntersection triangle;
 };
 
 enum SamplingMode { kSamplingMode_Default, kSamplingMode_Jitter };
