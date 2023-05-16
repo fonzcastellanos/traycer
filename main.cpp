@@ -404,36 +404,6 @@ static glm::vec3 TraceRay(Ray *ray, const Scene *scene, int bounces,
   }
 }
 
-// static void GetReflectedRay(Ray *ray, const Sphere *spheres,
-//                             const Triangle *triangles, Intersection *in,
-//                             Ray *reflected_ray) {
-//   assert(ray);
-//   assert(spheres);
-//   assert(triangles);
-//   assert(in);
-//   assert(reflected_ray);
-
-//   glm::vec3 p = ray->position + in->t * ray->direction;
-//   glm::vec3 n;
-//   if (in->type == kGeometryType_Sphere) {
-//     int s = in->sphere.index;
-//     n = (p - spheres[s].position) / spheres[s].radius;
-//   } else if (in->type == kGeometryType_Triangle) {
-//     int tri = in->triangle.index;
-//     float alpha = in->triangle.alpha;
-//     float beta = in->triangle.beta;
-//     float gamma = in->triangle.gamma;
-
-//     n = triangles[tri].vertices[0].normal * alpha +
-//         triangles[tri].vertices[1].normal * beta +
-//         triangles[tri].vertices[2].normal * gamma;
-//     n = glm::normalize(n);
-//   }
-//   float vn = glm::clamp<float>(glm::dot(-ray->direction, n), 0, 1);
-//   reflected_ray->direction = glm::normalize(2 * vn * n + ray->direction);
-//   reflected_ray->position = p;
-// }
-
 static glm::vec3 Shade(Intersection *surface, const Scene *scene, int bounces,
                        const Lights *extra_lights) {
   assert(surface);
