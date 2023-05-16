@@ -411,10 +411,10 @@ static glm::vec3 Trace(Ray *ray, const Scene *scene, int bounces,
                       scene->triangles, scene->triangle_count, &intersection);
   if (!hit) {
     return kBackgroundColor;
-  } else {
-    return Shade(ray, &intersection, scene, bounces, extra_lights,
-                 extra_lights_per_light);
   }
+
+  return Shade(ray, &intersection, scene, bounces, extra_lights,
+               extra_lights_per_light);
 }
 
 static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
@@ -442,35 +442,34 @@ static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
 
   // Calculate surface-specific parameters.
   if (visible_intxn->type == kSurfaceType_Sphere) {
-    const auto &sph = spheres[visible_intxn->index];
+    const auto &s = spheres[visible_intxn->index];
 
-    normal = (visible_intxn_pos - sph.position) / sph.radius;
+    normal = (visible_intxn_pos - s.position) / s.radius;
 
-    diffuse_color = sph.color_diffuse;
-    specular_color = sph.color_specular;
-    shininess = sph.shininess;
+    diffuse_color = s.color_diffuse;
+    specular_color = s.color_specular;
+    shininess = s.shininess;
   } else if (visible_intxn->type == kSurfaceType_Triangle) {
-    const auto &tri = triangles[visible_intxn->index];
+    const auto &t = triangles[visible_intxn->index];
 
-    float alpha = visible_intxn->triangle.alpha;
-    float beta = visible_intxn->triangle.beta;
-    float gamma = visible_intxn->triangle.gamma;
+    float a = visible_intxn->triangle.alpha;
+    float b = visible_intxn->triangle.beta;
+    float g = visible_intxn->triangle.gamma;
 
-    normal = tri.vertices[0].normal * alpha + tri.vertices[1].normal * beta +
-             tri.vertices[2].normal * gamma;
+    normal = t.vertices[0].normal * a + t.vertices[1].normal * b +
+             t.vertices[2].normal * g;
     normal = glm::normalize(normal);
 
-    diffuse_color = tri.vertices[0].color_diffuse * alpha +
-                    tri.vertices[1].color_diffuse * beta +
-                    tri.vertices[2].color_diffuse * gamma;
+    diffuse_color = t.vertices[0].color_diffuse * a +
+                    t.vertices[1].color_diffuse * b +
+                    t.vertices[2].color_diffuse * g;
 
-    specular_color = tri.vertices[0].color_specular * alpha +
-                     tri.vertices[1].color_specular * beta +
-                     tri.vertices[2].color_specular * gamma;
+    specular_color = t.vertices[0].color_specular * a +
+                     t.vertices[1].color_specular * b +
+                     t.vertices[2].color_specular * g;
 
-    shininess = tri.vertices[0].shininess * alpha +
-                tri.vertices[1].shininess * beta +
-                tri.vertices[2].shininess * gamma;
+    shininess = t.vertices[0].shininess * a + t.vertices[1].shininess * b +
+                t.vertices[2].shininess * g;
   }
 
   // Launch shadow rays for local phong color.
@@ -535,10 +534,9 @@ static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
 
     glm::vec3 color =
         Trace(&r, scene, bounces - 1, extra_lights, extra_lights_per_light);
-    for (int i = 0; i < kRgbChannel__Count; ++i) {
-      phong_color[i] *= (1 - specular_color[i]);
-      phong_color[i] += specular_color[i] * color[i];
-    }
+
+    phong_color =
+        phong_color * (1.0f - specular_color) + specular_color * color;
   }
 
   return phong_color;
