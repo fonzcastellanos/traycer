@@ -8,8 +8,8 @@
 
 struct Config {
   char *scene_filepath;
-  int jitter;
-  int bounces;
+  uint jitter;
+  uint bounces;
   uint extra_lights_per_light;
   char render_filepath[FILEPATH_BUFFER_SIZE];
 };

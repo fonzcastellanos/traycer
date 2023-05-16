@@ -96,7 +96,7 @@ static void Init() {
 }
 
 void Idle() {
-  // hack to make it only draw once
+  // Hack to make it only draw once.
   static int once = 0;
   if (!once) {
     RenderToWindow(img_buffer, IMG_W, IMG_H);
@@ -403,10 +403,10 @@ static glm::vec3 PhongColor(glm::vec3 light_color, glm::vec3 diffuse_color,
 }
 
 static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
-                       const Scene *scene, int bounces,
+                       const Scene *scene, uint bounces,
                        const Lights *extra_lights, uint extra_lights_per_light);
 
-static glm::vec3 Trace(Ray *ray, const Scene *scene, int bounces,
+static glm::vec3 Trace(Ray *ray, const Scene *scene, uint bounces,
                        const Lights *extra_lights,
                        uint extra_lights_per_light) {
   assert(ray);
@@ -424,7 +424,7 @@ static glm::vec3 Trace(Ray *ray, const Scene *scene, int bounces,
 }
 
 static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
-                       const Scene *scene, int bounces,
+                       const Scene *scene, uint bounces,
                        const Lights *extra_lights,
                        uint extra_lights_per_light) {
   assert(ray);
@@ -540,7 +540,7 @@ static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
     }
   }
 
-  if (bounces <= 0) {
+  if (bounces == 0) {
     return total_color;
   }
 
@@ -563,8 +563,8 @@ static Status ParseConfig(uint argc, char *argv[], Config *c) {
   assert(c);
 
   cli::Opt opts[] = {
-      {"jitter", cli::kOptArgType_Int, &c->jitter},
-      {"bounces", cli::kOptArgType_Int, &c->bounces},
+      {"jitter", cli::kOptArgType_Uint, &c->jitter},
+      {"bounces", cli::kOptArgType_Uint, &c->bounces},
       {"soft-shadows", cli::kOptArgType_Uint, &c->extra_lights_per_light},
       {"render-to-file", cli::kOptArgType_String, c->render_filepath},
   };
@@ -641,7 +641,7 @@ int main(int argc, char **argv) {
   }
 
   std::vector<Ray> rays;
-  int rays_per_pixel;
+  uint rays_per_pixel;
   if (config.jitter > 0) {
     rays_per_pixel = config.jitter;
     MakeJitteredRays(kCameraPosition, IMG_W, IMG_H, FOV, FOCAL_LEN,
@@ -654,7 +654,7 @@ int main(int argc, char **argv) {
   for (int y = 0; y < IMG_H; ++y) {
     for (int x = 0; x < IMG_W; ++x) {
       glm::vec3 color;
-      for (int i = 0; i < rays_per_pixel; ++i) {
+      for (uint i = 0; i < rays_per_pixel; ++i) {
         uint j = (y * IMG_W + x) * rays_per_pixel + i;
         color += Trace(&rays[j], &scene, config.bounces, &extra_lights,
                        config.extra_lights_per_light);
