@@ -8,10 +8,10 @@ namespace cli {
 typedef unsigned int uint;
 
 enum OptArgType {
-  kOptType_Int,
-  kOptType_Uint,
-  kOptType_Float,
-  kOptType_String
+  kOptArgType_Int,
+  kOptArgType_Uint,
+  kOptArgType_Float,
+  kOptArgType_String
 };
 
 struct Opt {

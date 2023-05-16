@@ -556,11 +556,11 @@ static Status ParseConfig(uint argc, char *argv[], Config *c) {
   assert(c);
 
   cli::Opt opts[] = {
-      {"jitter", cli::kOptType_Int, &c->jitter},
-      {"bounces", cli::kOptType_Int, &c->bounces},
-      {"extra-lights-per-light", cli::kOptType_Uint,
+      {"jitter", cli::kOptArgType_Int, &c->jitter},
+      {"bounces", cli::kOptArgType_Int, &c->bounces},
+      {"extra-lights-per-light", cli::kOptArgType_Uint,
        &c->extra_lights_per_light},
-      {"render-file", cli::kOptType_String, c->render_filepath},
+      {"render-file", cli::kOptArgType_String, c->render_filepath},
   };
   uint size = sizeof(opts) / sizeof(opts[0]);
   uint argi;

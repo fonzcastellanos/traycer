@@ -38,19 +38,19 @@ Status ParseOpts(uint argc, char* argv[], Opt opts[], uint opts_size,
 
     const char* format;
     switch (opts[j].arg_type) {
-      case kOptType_Int: {
+      case kOptArgType_Int: {
         format = "%d";
         break;
       }
-      case kOptType_Uint: {
+      case kOptArgType_Uint: {
         format = "%u";
         break;
       }
-      case kOptType_Float: {
+      case kOptArgType_Float: {
         format = "%f";
         break;
       }
-      case kOptType_String: {
+      case kOptArgType_String: {
         format = "%s";
         break;
       }
