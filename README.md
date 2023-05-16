@@ -62,4 +62,6 @@ Options:
 - `--soft-shadows <number of extra lights per light>`: Soft shadows are applied if option argument is greater than 0. Default option argument is 0. 
 - `--render-to-file <filepath>`: Rendered image will be written to a JPEG file at the path provided.
 
+To exit the program, have the window in focus and press ESC. You can also terminate the program by pressing CTRL + C in the terminal
+
 The [`scenes`](scenes) directory contains example scene files. 
