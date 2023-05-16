@@ -55,9 +55,9 @@ static void RenderToWindow(const uchar *buffer, uint w, uint h) {
     glBegin(GL_POINTS);
     for (uint y = 0; y < h; ++y) {
       uint i = (y * w + x) * kRgbChannel__Count;
-      uchar r = img_buffer[i + kRgbChannel_Red];
-      uchar g = img_buffer[i + kRgbChannel_Green];
-      uchar b = img_buffer[i + kRgbChannel_Blue];
+      uchar r = buffer[i + kRgbChannel_Red];
+      uchar g = buffer[i + kRgbChannel_Green];
+      uchar b = buffer[i + kRgbChannel_Blue];
       glColor3f(r * (1.0f / 255), g * (1.0f / 255), b * (1.0f / 255));
       glVertex2i(x, y);
     }
