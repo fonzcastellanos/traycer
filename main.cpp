@@ -47,17 +47,17 @@ const glm::vec3 kCameraPosition(0, 0, 0);
 static Config config;
 static RenderTarget render_target = kRenderTarget_Window;
 
-static uchar buffer[IMG_W * IMG_H * kRgbChannel__Count];
+static uchar img_buffer[IMG_W * IMG_H * kRgbChannel__Count];
 
-static void RenderToWindow() {
-  for (uint x = 0; x < IMG_W; ++x) {
+static void RenderToWindow(uint w, uint h) {
+  for (uint x = 0; x < w; ++x) {
     glPointSize(2);
     glBegin(GL_POINTS);
-    for (uint y = 0; y < IMG_H; ++y) {
-      uint i = (y * IMG_W + x) * kRgbChannel__Count;
-      uchar r = buffer[i + kRgbChannel_Red];
-      uchar g = buffer[i + kRgbChannel_Green];
-      uchar b = buffer[i + kRgbChannel_Blue];
+    for (uint y = 0; y < h; ++y) {
+      uint i = (y * w + x) * kRgbChannel__Count;
+      uchar r = img_buffer[i + kRgbChannel_Red];
+      uchar g = img_buffer[i + kRgbChannel_Green];
+      uchar b = img_buffer[i + kRgbChannel_Blue];
       glColor3f(r * (1.0f / 255), g * (1.0f / 255), b * (1.0f / 255));
       glVertex2i(x, y);
     }
@@ -99,10 +99,10 @@ void Idle() {
   // hack to make it only draw once
   static int once = 0;
   if (!once) {
-    RenderToWindow();
+    RenderToWindow(IMG_W, IMG_H);
     if (render_target == kRenderTarget_Jpeg) {
       Status status =
-          RenderToJpeg(buffer, IMG_W, IMG_H, config.render_filepath);
+          RenderToJpeg(img_buffer, IMG_W, IMG_H, config.render_filepath);
       if (status != kStatus_Ok) {
         std::fprintf(stderr, "Failed to save JPEG file %s.\n",
                      config.render_filepath);
@@ -660,7 +660,7 @@ int main(int argc, char **argv) {
                        config.extra_lights_per_light);
       }
       for (int i = 0; i < kRgbChannel__Count; ++i) {
-        buffer[(y * IMG_W + x) * kRgbChannel__Count + i] =
+        img_buffer[(y * IMG_W + x) * kRgbChannel__Count + i] =
             glm::clamp<float>(color[i] / rays_per_pixel, 0, 1) * 255;
       }
     }
