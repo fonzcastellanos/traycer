@@ -6,8 +6,8 @@
 namespace cli {
 
 const char* const kStatusMessages[] = {
-    "success", "invalid option type", "missing option value",
-    "invalid option value", "unexpected option name"};
+    "success", "invalid option argument type", "missing option argument",
+    "invalid option argument", "unexpected option name"};
 
 const char* StatusMessage(Status s) { return kStatusMessages[s]; }
 
@@ -23,7 +23,7 @@ Status ParseOpts(uint argc, char* argv[], Opt opts[], uint opts_size,
 
     if (i + 1 >= argc) {
       *argi = i;
-      return kStatus_MissingOptVal;
+      return kStatus_MissingOptArg;
     }
 
     uint j = 0;
@@ -37,7 +37,7 @@ Status ParseOpts(uint argc, char* argv[], Opt opts[], uint opts_size,
     }
 
     const char* format;
-    switch (opts[j].type) {
+    switch (opts[j].arg_type) {
       case kOptType_Int: {
         format = "%d";
         break;
@@ -56,14 +56,14 @@ Status ParseOpts(uint argc, char* argv[], Opt opts[], uint opts_size,
       }
       default: {
         *argi = i;
-        return kStatus_InvalidOptType;
+        return kStatus_InvalidOptArgType;
       }
     }
 
-    int rc = std::sscanf(argv[i + 1], format, opts[j].val);
+    int rc = std::sscanf(argv[i + 1], format, opts[j].arg);
     if (rc != 1) {
       *argi = i;
-      return kStatus_InvalidOptVal;
+      return kStatus_InvalidOptArg;
     }
 
     i += 2;

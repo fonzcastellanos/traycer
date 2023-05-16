@@ -7,19 +7,24 @@ namespace cli {
 
 typedef unsigned int uint;
 
-enum OptType { kOptType_Int, kOptType_Uint, kOptType_Float, kOptType_String };
+enum OptArgType {
+  kOptType_Int,
+  kOptType_Uint,
+  kOptType_Float,
+  kOptType_String
+};
 
 struct Opt {
   char name[CLI_OPT_NAME_BUFFER_SIZE];
-  OptType type;
-  void *val;
+  OptArgType arg_type;
+  void *arg;
 };
 
 enum Status {
   kStatus_Ok,
-  kStatus_InvalidOptType,
-  kStatus_MissingOptVal,
-  kStatus_InvalidOptVal,
+  kStatus_InvalidOptArgType,
+  kStatus_MissingOptArg,
+  kStatus_InvalidOptArg,
   kStatus_UnexpectedOptName,
 };
 
