@@ -33,6 +33,8 @@
 #define FOCAL_LEN 1
 #define FOV 60
 
+#define MAX_EXTRA_LIGHT_POSITION_OFFSET 0.5
+
 const char *kWindowName = "traycer";
 
 constexpr float kTolerance = 0.000001;
@@ -93,7 +95,7 @@ static void Init() {
   glClear(GL_COLOR_BUFFER_BIT);
 }
 
-void Idle() {
+static void Idle() {
   // Hack to make it only draw once.
   static int once = 0;
   if (!once) {
@@ -608,7 +610,8 @@ int main(int argc, char **argv) {
 
   if (config.extra_lights_per_light > 0) {
     std::default_random_engine re(std::random_device{}());
-    std::uniform_real_distribution<float> distrib(-1, 1);
+    std::uniform_real_distribution<float> distrib(
+        -MAX_EXTRA_LIGHT_POSITION_OFFSET, MAX_EXTRA_LIGHT_POSITION_OFFSET);
 
     uint count = scene.light_count * config.extra_lights_per_light;
     extra_lights.positions.resize(count);
