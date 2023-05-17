@@ -204,7 +204,7 @@ Status LoadScene(const char *filepath, Scene *scene) {
 
   scene->light_count = 0;
   scene->sphere_count = 0;
-  scene->triangle_count = 0;
+  scene->triangles.count = 0;
 
   for (uint i = 0; i < obj_count; ++i) {
     int rc = std::fscanf(file, "%s\n", type);
@@ -228,8 +228,24 @@ Status LoadScene(const char *filepath, Scene *scene) {
       t.area = len / 2;
       t.normal = t.normal / len;
 
-      scene->triangles[scene->triangle_count] = t;
-      ++scene->triangle_count;
+      scene->triangles.normal[scene->triangles.count] = t.normal;
+      scene->triangles.area[scene->triangles.count] = t.area;
+
+      for (uint j = 0; j < 3; ++j) {
+        uint k = scene->triangles.count * 3 + j;
+        scene->triangles.vertices.position[k] = t.vertices[j].position;
+
+        scene->triangles.vertices.diffuse_color[k] =
+            t.vertices[j].color_diffuse;
+
+        scene->triangles.vertices.specular_color[k] =
+            t.vertices[j].color_specular;
+
+        scene->triangles.vertices.normal[k] = t.vertices[j].normal;
+        scene->triangles.vertices.shininess[k] = t.vertices[j].shininess;
+      }
+
+      ++scene->triangles.count;
     } else if (std::strcmp(type, "sphere") == 0) {
       Sphere sph;
       st = ParseSphere(file, &sph);

@@ -254,25 +254,31 @@ static float IntersectSphere(const Ray *ray, const Sphere *sph) {
   return t;
 }
 
-static float IntersectTriangle(const Ray *ray, const Triangle *tri,
-                               float *alpha, float *beta, float *gamma) {
+static float IntersectTriangle(const Ray *ray, const Triangles *triangles,
+                               uint tri_idx, float *alpha, float *beta,
+                               float *gamma) {
   assert(ray);
-  assert(tri);
+  assert(triangles);
   assert(alpha);
   assert(beta);
   assert(gamma);
 
-  const auto &verts = tri->vertices;
+  const auto &verts = triangles->vertices;
 
-  float n_dot_ray = glm::dot(tri->normal, ray->direction);
+  const glm::vec3 &normal = triangles->normal[tri_idx];
+  const glm::vec3 &pos0 = verts.position[tri_idx * 3];
+  const glm::vec3 &pos1 = verts.position[tri_idx * 3 + 1];
+  const glm::vec3 &pos2 = verts.position[tri_idx * 3 + 2];
+
+  float n_dot_ray = glm::dot(normal, ray->direction);
 
   int plane_parallel_to_ray = glm::abs(n_dot_ray) < kTolerance;
   if (plane_parallel_to_ray) {
     return 0;
   }
 
-  float d = -glm::dot(tri->normal, verts[0].position);
-  float t = -(glm::dot(tri->normal, ray->position) + d) / n_dot_ray;
+  float d = -glm::dot(normal, pos0);
+  float t = -(glm::dot(normal, ray->position) + d) / n_dot_ray;
 
   int intersection_behind_ray_origin = t < kTolerance;
   if (intersection_behind_ray_origin) {
@@ -284,31 +290,31 @@ static float IntersectTriangle(const Ray *ray, const Triangle *tri,
   // Perpendicular to subtriangle.
   glm::vec3 np;
 
-  glm::vec3 e0p = p - verts[0].position;
-  glm::vec3 e01 = verts[1].position - verts[0].position;
+  glm::vec3 e0p = p - pos0;
+  glm::vec3 e01 = pos1 - pos0;
   np = glm::cross(e01, e0p);
   // Inside-outside test.
-  if (glm::dot(tri->normal, np) < -kTolerance) {
+  if (glm::dot(normal, np) < -kTolerance) {
     return 0;
   }
 
-  float twice_area = 2 * tri->area;
+  float twice_area = 2 * triangles->area[tri_idx];
 
   float gamma_ = glm::length(np) / twice_area;
 
-  glm::vec3 e12 = verts[2].position - verts[1].position;
-  glm::vec3 e1p = p - verts[1].position;
+  glm::vec3 e12 = pos2 - pos1;
+  glm::vec3 e1p = p - pos1;
   np = glm::cross(e12, e1p);
-  if (glm::dot(tri->normal, np) < -kTolerance) {
+  if (glm::dot(normal, np) < -kTolerance) {
     return 0;
   }
 
   float alpha_ = glm::length(np) / twice_area;
 
-  glm::vec3 e20 = verts[0].position - verts[2].position;
-  glm::vec3 e2p = p - verts[2].position;
+  glm::vec3 e20 = pos0 - pos2;
+  glm::vec3 e2p = p - pos2;
   np = glm::cross(e20, e2p);
-  if (glm::dot(tri->normal, np) < -kTolerance) {
+  if (glm::dot(normal, np) < -kTolerance) {
     return 0;
   }
 
@@ -320,8 +326,7 @@ static float IntersectTriangle(const Ray *ray, const Triangle *tri,
 }
 
 static int Intersect(const Ray *ray, const Sphere *spheres, uint sphere_count,
-                     const Triangle *triangles, uint triangle_count,
-                     Intersection *intersection) {
+                     const Triangles *triangles, Intersection *intersection) {
   assert(ray);
   assert(spheres);
   assert(triangles);
@@ -348,11 +353,11 @@ static int Intersect(const Ray *ray, const Sphere *spheres, uint sphere_count,
   }
 
   // Triangles
-  for (uint i = 0; i < triangle_count; ++i) {
+  for (uint i = 0; i < triangles->count; ++i) {
     float alpha;
     float beta;
     float gamma;
-    float t = IntersectTriangle(ray, &triangles[i], &alpha, &beta, &gamma);
+    float t = IntersectTriangle(ray, triangles, i, &alpha, &beta, &gamma);
 
     int hit = t > kTolerance;
     int further = t > intersection->t + kTolerance;
@@ -402,7 +407,7 @@ static glm::vec3 Trace(Ray *ray, const Scene *scene, uint bounces,
 
   Intersection intersection;
   int hit = Intersect(ray, scene->spheres, scene->sphere_count,
-                      scene->triangles, scene->triangle_count, &intersection);
+                      &scene->triangles, &intersection);
   if (!hit) {
     return kBackgroundColor;
   }
@@ -420,8 +425,7 @@ static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
   assert(scene);
   assert(extra_lights);
 
-  const Triangle *triangles = scene->triangles;
-  uint triangle_count = scene->triangle_count;
+  const Triangles &triangles = scene->triangles;
   const Sphere *spheres = scene->spheres;
   uint sphere_count = scene->sphere_count;
   const Light *lights = scene->lights;
@@ -447,26 +451,28 @@ static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
       break;
     }
     case kSurfaceType_Triangle: {
-      const auto &t = triangles[visible_intxn->index];
+      uint i = visible_intxn->index;
+      const auto &verts = triangles.vertices;
+      // const auto &t = triangles[visible_intxn->index];
 
       float a = visible_intxn->triangle.alpha;
       float b = visible_intxn->triangle.beta;
       float g = visible_intxn->triangle.gamma;
 
-      normal = t.vertices[0].normal * a + t.vertices[1].normal * b +
-               t.vertices[2].normal * g;
+      normal = verts.normal[i * 3] * a + verts.normal[i * 3 + 1] * b +
+               verts.normal[i * 3 + 2] * g;
       normal = glm::normalize(normal);
 
-      diffuse_color = t.vertices[0].color_diffuse * a +
-                      t.vertices[1].color_diffuse * b +
-                      t.vertices[2].color_diffuse * g;
+      diffuse_color = verts.diffuse_color[i * 3] * a +
+                      verts.diffuse_color[i * 3 + 1] * b +
+                      verts.diffuse_color[i * 3 + 2] * g;
 
-      specular_color = t.vertices[0].color_specular * a +
-                       t.vertices[1].color_specular * b +
-                       t.vertices[2].color_specular * g;
+      specular_color = verts.specular_color[i * 3] * a +
+                       verts.specular_color[i * 3 + 1] * b +
+                       verts.specular_color[i * 3 + 2] * g;
 
-      shininess = t.vertices[0].shininess * a + t.vertices[1].shininess * b +
-                  t.vertices[2].shininess * g;
+      shininess = verts.shininess[i * 3] * a + verts.shininess[i * 3 + 1] * b +
+                  verts.shininess[i * 3 + 2] * g;
       break;
     }
     default: {
@@ -485,8 +491,8 @@ static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
     shadow_ray.direction = shadow_to_light / shadow_to_light_dist;
 
     Intersection occluder_intxn;
-    int hit = Intersect(&shadow_ray, spheres, sphere_count, triangles,
-                        triangle_count, &occluder_intxn);
+    int hit = Intersect(&shadow_ray, spheres, sphere_count, &triangles,
+                        &occluder_intxn);
 
     int occluded = hit && occluder_intxn.t + kTolerance < shadow_to_light_dist;
     if (occluded) {
@@ -512,8 +518,8 @@ static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
       shadow_ray.direction = shadow_to_light / shadow_to_light_dist;
 
       Intersection occluder_intxn;
-      int hit = Intersect(&shadow_ray, spheres, sphere_count, triangles,
-                          triangle_count, &occluder_intxn);
+      int hit = Intersect(&shadow_ray, spheres, sphere_count, &triangles,
+                          &occluder_intxn);
 
       int occluded =
           hit && occluder_intxn.t + kTolerance < shadow_to_light_dist;

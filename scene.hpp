@@ -32,6 +32,21 @@ struct Triangle {
   float area;
 };
 
+struct TriangleVertices {
+  glm::vec3 position[MAX_TRIANGLE_COUNT * 3];
+  glm::vec3 diffuse_color[MAX_TRIANGLE_COUNT * 3];
+  glm::vec3 specular_color[MAX_TRIANGLE_COUNT * 3];
+  glm::vec3 normal[MAX_TRIANGLE_COUNT * 3];
+  float shininess[MAX_TRIANGLE_COUNT * 3];
+};
+
+struct Triangles {
+  TriangleVertices vertices;
+  glm::vec3 normal[MAX_TRIANGLE_COUNT];
+  float area[MAX_TRIANGLE_COUNT];
+  uint count;
+};
+
 struct Light {
   glm::vec3 position;
   glm::vec3 color;
@@ -46,8 +61,7 @@ struct Scene {
   Sphere spheres[MAX_SPHERE_COUNT];
   uint sphere_count;
 
-  Triangle triangles[MAX_TRIANGLE_COUNT];
-  uint triangle_count;
+  Triangles triangles;
 };
 
 Status LoadScene(const char* filepath, Scene* scene);
