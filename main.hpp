@@ -2,7 +2,6 @@
 #define TRAYCER_MAIN_HPP
 
 #include <glm/glm/vec3.hpp>
-#include <vector>
 
 #define FILEPATH_BUFFER_SIZE 4096
 
