@@ -21,11 +21,6 @@ enum RgbChannel {
   kRgbChannel__Count
 };
 
-struct Lights {
-  std::vector<glm::vec3> positions;
-  std::vector<glm::vec3> colors;
-};
-
 struct Ray {
   glm::vec3 position;
   glm::vec3 direction;

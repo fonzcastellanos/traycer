@@ -394,11 +394,10 @@ static glm::vec3 PhongColor(glm::vec3 light_color, glm::vec3 diffuse_color,
 
 static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
                        const Scene *scene, uint bounces,
-                       const Lights *extra_lights, uint extra_lights_per_light);
+                       const Light *extra_lights, uint extra_lights_per_light);
 
 static glm::vec3 Trace(Ray *ray, const Scene *scene, uint bounces,
-                       const Lights *extra_lights,
-                       uint extra_lights_per_light) {
+                       const Light *extra_lights, uint extra_lights_per_light) {
   assert(ray);
   assert(scene);
 
@@ -415,8 +414,7 @@ static glm::vec3 Trace(Ray *ray, const Scene *scene, uint bounces,
 
 static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
                        const Scene *scene, uint bounces,
-                       const Lights *extra_lights,
-                       uint extra_lights_per_light) {
+                       const Light *extra_lights, uint extra_lights_per_light) {
   assert(ray);
   assert(visible_intxn);
   assert(scene);
@@ -508,7 +506,7 @@ static glm::vec3 Shade(const Ray *ray, const Intersection *visible_intxn,
       uint k = i * extra_lights_per_light + j;
 
       glm::vec3 shadow_to_light =
-          extra_lights->positions[k] - shadow_ray.position;
+          extra_lights[k].position - shadow_ray.position;
       float shadow_to_light_dist = glm::length(shadow_to_light);
 
       shadow_ray.direction = shadow_to_light / shadow_to_light_dist;
@@ -606,7 +604,7 @@ int main(int argc, char **argv) {
   glutKeyboardFunc(OnKeyPress);
   Init();
 
-  Lights extra_lights;
+  std::vector<Light> extra_lights;
 
   if (config.extra_lights_per_light > 0) {
     std::default_random_engine re(std::random_device{}());
@@ -614,8 +612,7 @@ int main(int argc, char **argv) {
         -MAX_EXTRA_LIGHT_POSITION_OFFSET, MAX_EXTRA_LIGHT_POSITION_OFFSET);
 
     uint count = scene.light_count * config.extra_lights_per_light;
-    extra_lights.positions.resize(count);
-    extra_lights.colors.resize(count);
+    extra_lights.resize(count);
 
     for (uint i = 0; i < scene.light_count; ++i) {
       for (uint j = 0; j < config.extra_lights_per_light; ++j) {
@@ -625,8 +622,8 @@ int main(int argc, char **argv) {
 
         uint k = i * config.extra_lights_per_light + j;
 
-        extra_lights.positions[k] = scene.lights[i].position + offset;
-        extra_lights.colors[k] = scene.lights[i].color;
+        extra_lights[k].position = scene.lights[i].position + offset;
+        extra_lights[k].color = scene.lights[i].color;
       }
     }
   }
@@ -647,7 +644,7 @@ int main(int argc, char **argv) {
       glm::vec3 color;
       for (uint i = 0; i < rays_per_pixel; ++i) {
         uint j = (y * IMG_W + x) * rays_per_pixel + i;
-        color += Trace(&rays[j], &scene, config.bounces, &extra_lights,
+        color += Trace(&rays[j], &scene, config.bounces, extra_lights.data(),
                        config.extra_lights_per_light);
       }
       for (int i = 0; i < kRgbChannel__Count; ++i) {
