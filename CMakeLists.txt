@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(NOT LINUX AND NOT APPLE)
     message(FATAL_ERROR "Target system is not supported.")
 endif()
- 
+
 add_compile_options(-Wall -Wextra -Wpedantic -DGLM_FORCE_RADIANS)
 
 add_subdirectory(vendor/glm)
