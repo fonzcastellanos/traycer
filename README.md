@@ -54,17 +54,19 @@ cmake --build build --config Release
 The built targets are placed in the directory `build`. There is only one executable target: `traycer`.
 
 ## Usage
-`./build/traycer [options...] <scene file>`
+`./build/traycer [options...] <scene-file>`
 
 Options:
-- `--jitter <number of rays per pixel>`: Enables supersampling via jittering if option argument is greater than 0. Default option argument is 0.
-- `--bounces <number of bounces>`: The depth of reflection recursion. Default option argument is 0.
-- `--soft-shadows <number of extra lights per light>`: Soft shadows are applied if option argument is greater than 0. Default option argument is 0. 
+- `--jitter <number-of-rays-per-pixel>`: Enables supersampling via jittering if option argument is greater than 0. Default option argument is 0.
+- `--bounces <number-of-reflection-bounces>`: The depth of reflection recursion. Default option argument is 0.
+- `--soft-shadows <number-of-extra-lights-per-light>`: Soft shadows are applied if option argument is greater than 0. Default option argument is 0. 
 - `--render-to-file <filepath>`: Rendered image will be written to a JPEG file at the path provided.
 
 To exit the program, have the window in focus and press ESC. You can also terminate the program by pressing CTRL + C in the terminal.
 
-### Example
-`./build/traycer --jitter 10 --bounces 5 --soft-shadows 5 --render-to-file scene.jpg scenes/spheres.scene`
-
 The [`scenes`](scenes) directory contains example scene files. 
+
+### Example
+```sh
+./build/traycer --jitter 10 --bounces 5 --soft-shadows 5 --render-to-file scene.jpg scenes/spheres.scene
+```
