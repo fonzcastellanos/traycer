@@ -31,6 +31,12 @@ My development environment and tooling:
 - CMake == 3.25.1
 - OpenGL == 4.1
 
+I built `traycer` on a Linux machine as well:
+- Operating system: Debian == 11.7
+- C++ compiler: gcc == 10.2.1
+- CMake == 3.26.3
+- OpenGL == 4.5
+
 ## Build Steps
 
 The build system must be generated before the project can be built. From the project directory, generate the build system:
