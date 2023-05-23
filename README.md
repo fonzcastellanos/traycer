@@ -63,12 +63,19 @@ The built targets are placed in the directory `build`. There is only one executa
 `./build/traycer [options...] <scene-file>`
 
 Options:
-- `--jitter <number-of-rays-per-pixel>`: Enables supersampling via jittering if option argument is greater than 0. Default option argument is 0.
-- `--bounces <number-of-reflection-bounces>`: The depth of reflection recursion. Default option argument is 0.
-- `--soft-shadows <number-of-extra-lights-per-light>`: Soft shadows are applied if option argument is greater than 0. Default option argument is 0. 
-- `--render-to-file <filepath>`: Rendered image will be written to a JPEG file at the path provided.
+- `--jitter <number-of-rays-per-pixel>`
+  - Enables supersampling via jittering if option argument is greater than 0. 
+  - The default option argument is 0.
+- `--bounces <number-of-reflection-bounces>`
+  - The depth of reflection recursion.
+  - The default option argument is 0.
+- `--soft-shadows <number-of-extra-lights-per-light>`
+  - Soft shadows are applied if option argument is greater than 0. 
+  - The default option argument is 0. 
+- `--render-to-file <filepath>`
+  - Rendered image will be written to a JPEG file at the path provided.
 
-To exit the program, have the window in focus and press ESC. You can also terminate the program by pressing CTRL + C in the terminal.
+To exit the program, have the window in focus and press `ESC`. You can also terminate the program by pressing `CTRL + C` in the terminal.
 
 The [`scenes`](scenes) directory contains example scene files. 
 
