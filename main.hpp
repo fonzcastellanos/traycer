@@ -3,6 +3,8 @@
 
 #include <glm/glm/vec3.hpp>
 
+#include "types.hpp"
+
 #define FILEPATH_BUFFER_SIZE 4096
 
 struct Config {
