@@ -2,7 +2,7 @@
 
 ![License](https://img.shields.io/github/license/fonzcastellanos/traycer)
 
-A ray tracer.
+A ray tracer with Phong shading, supersampling, recursive reflections, and soft shadows.
 
 spheres.scene             | table.scene
 :------------------------:|:-----------------------------------:
